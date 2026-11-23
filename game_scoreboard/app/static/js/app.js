@@ -82,6 +82,10 @@ function switchTab(tabId) {
 // -----------------------------------------------------------------------------
 // DASHBOARD
 // -----------------------------------------------------------------------------
+let evolutionChartInstance = null;
+let currentChartMode = 'cumulative';
+let cachedTimelineData = null;
+
 async function loadDashboard() {
   try {
     await ensureGamesLoaded();
@@ -114,6 +118,16 @@ async function loadDashboard() {
       renderPodium(leaderboard);
     }
 
+    // Load Timeline & Advanced Meta Stats
+    let tlUrl = `/api/stats/timeline?include_practice=${includePractice}`;
+    if (selectedGame) tlUrl += `&game_id=${encodeURIComponent(selectedGame)}`;
+    const tlRes = await fetch(getApiUrl(tlUrl));
+    if (tlRes.ok) {
+      cachedTimelineData = await tlRes.json();
+      renderEvolutionChart(cachedTimelineData);
+      renderAdvancedStats(cachedTimelineData);
+    }
+
     // Load Recent Matches
     const rmRes = await fetch(getApiUrl('/api/stats/recent_matches?limit=8'));
     if (rmRes.ok) {
@@ -122,6 +136,233 @@ async function loadDashboard() {
     }
   } catch (err) {
     console.error('Error loading dashboard:', err);
+  }
+}
+
+function switchChartMode(mode) {
+  currentChartMode = mode;
+  const cumBtn = document.getElementById('chart-mode-cumulative');
+  const matchBtn = document.getElementById('chart-mode-match');
+  if (mode === 'cumulative') {
+    if (cumBtn) cumBtn.className = 'px-2.5 py-1 rounded-lg font-semibold text-indigo-400 bg-slate-800 transition';
+    if (matchBtn) matchBtn.className = 'px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition';
+  } else {
+    if (cumBtn) cumBtn.className = 'px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition';
+    if (matchBtn) matchBtn.className = 'px-2.5 py-1 rounded-lg font-semibold text-indigo-400 bg-slate-800 transition';
+  }
+  if (cachedTimelineData) {
+    renderEvolutionChart(cachedTimelineData);
+  }
+}
+
+function renderEvolutionChart(data) {
+  const canvas = document.getElementById('dash-evolution-chart');
+  const emptyEl = document.getElementById('dash-chart-empty');
+  if (!canvas) return;
+
+  const timeline = (data && data.timeline) || [];
+  const players = (data && data.players) || {};
+
+  if (!timeline || timeline.length === 0) {
+    if (emptyEl) emptyEl.classList.remove('hidden');
+    if (evolutionChartInstance) {
+      evolutionChartInstance.destroy();
+      evolutionChartInstance = null;
+    }
+    return;
+  }
+  if (emptyEl) emptyEl.classList.add('hidden');
+
+  const participatingPlayerIds = new Set();
+  timeline.forEach(t => {
+    Object.keys(t.scores || {}).forEach(pid => participatingPlayerIds.add(Number(pid)));
+  });
+
+  const palette = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#38bdf8', '#a855f7', '#ef4444', '#14b8a6'];
+  const labels = timeline.map(t => t.label || `#${t.match_number}`);
+
+  const datasets = [];
+  let colorIdx = 0;
+  participatingPlayerIds.forEach(pId => {
+    const pInfo = players[pId] || {};
+    const pName = pInfo.nickname || pInfo.name || `P${pId}`;
+    const pColor = pInfo.color_hex || palette[colorIdx % palette.length];
+    colorIdx++;
+
+    const seriesData = timeline.map(t => {
+      const sc = (t.scores && t.scores[String(pId)]) || null;
+      if (!sc) return null;
+      return currentChartMode === 'cumulative' ? sc.cumulative_score : sc.score;
+    });
+
+    datasets.push({
+      label: pName,
+      data: seriesData,
+      borderColor: pColor,
+      backgroundColor: pColor + '20',
+      borderWidth: 2.5,
+      tension: 0.35,
+      fill: false,
+      pointRadius: timeline.length > 20 ? 2 : 4,
+      pointHoverRadius: 6,
+      spanGaps: true
+    });
+  });
+
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js not loaded');
+    return;
+  }
+
+  if (evolutionChartInstance) {
+    evolutionChartInstance.destroy();
+  }
+
+  const ctx = canvas.getContext('2d');
+  evolutionChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: {
+            color: '#cbd5e1',
+            boxWidth: 12,
+            font: { size: 11, weight: 'bold' }
+          }
+        },
+        tooltip: {
+          backgroundColor: '#0f172a',
+          titleColor: '#ffffff',
+          bodyColor: '#cbd5e1',
+          borderColor: '#334155',
+          borderWidth: 1,
+          padding: 10,
+          boxPadding: 4,
+          usePointStyle: true,
+          callbacks: {
+            title: function(tooltipItems) {
+              const item = tooltipItems[0];
+              const matchObj = timeline[item.dataIndex];
+              return matchObj ? `${matchObj.session_title} · Partida #${matchObj.match_number} (${matchObj.date})` : item.label;
+            },
+            label: function(context) {
+              const pId = Array.from(participatingPlayerIds)[context.datasetIndex];
+              const matchObj = timeline[context.dataIndex];
+              const scObj = matchObj && matchObj.scores && matchObj.scores[String(pId)];
+              const charStr = scObj && scObj.character ? ` (${scObj.character})` : '';
+              return ` ${context.dataset.label}: ${context.parsed.y} pts${charStr}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#1e293b' },
+          ticks: { color: '#64748b', font: { size: 10 } }
+        },
+        y: {
+          grid: { color: '#1e293b' },
+          ticks: { color: '#64748b', font: { size: 10 } },
+          title: {
+            display: true,
+            text: currentChartMode === 'cumulative' ? 'Puntos Acumulados' : 'Puntos por Partida',
+            color: '#64748b',
+            font: { size: 10 }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderAdvancedStats(data) {
+  if (!data) return;
+
+  // Record Match
+  const rec = data.record_score;
+  const recPlayerEl = document.getElementById('stat-record-player');
+  const recScoreEl = document.getElementById('stat-record-score');
+  const recDetailEl = document.getElementById('stat-record-detail');
+  if (recPlayerEl) {
+    if (rec && rec.score > 0) {
+      recPlayerEl.textContent = rec.player_name || rec.player_nickname;
+      recScoreEl.textContent = `${rec.score} pts`;
+      const charStr = rec.character ? ` con ${rec.character}` : '';
+      recDetailEl.textContent = `${rec.match_title}${charStr} (${rec.date})`;
+    } else {
+      recPlayerEl.textContent = 'Sin récord aún';
+      recScoreEl.textContent = '0 pts';
+      recDetailEl.textContent = 'Registra partidas oficiales';
+    }
+  }
+
+  // Top Character / Meta
+  const charStats = data.character_stats || [];
+  const topChar = charStats[0];
+  const charPlayerEl = document.getElementById('stat-top-char');
+  const charWinsEl = document.getElementById('stat-top-char-wins');
+  const charWinrateEl = document.getElementById('stat-top-char-winrate');
+  if (charPlayerEl) {
+    if (topChar) {
+      charPlayerEl.textContent = topChar.character;
+      charWinsEl.textContent = `${topChar.wins} victorias (${topChar.picks} carreras)`;
+      charWinrateEl.textContent = `Efectividad: ${topChar.win_rate}%`;
+    } else {
+      charPlayerEl.textContent = 'Sin personaje registrado';
+      charWinsEl.textContent = '0 victorias';
+      charWinrateEl.textContent = 'Efectividad: 0%';
+    }
+  }
+
+  // Best Winrate Player
+  const pWins = {};
+  const pPicks = {};
+  (data.timeline || []).forEach(t => {
+    Object.entries(t.scores || {}).forEach(([pId, sc]) => {
+      pPicks[pId] = (pPicks[pId] || 0) + 1;
+      if (sc.rank === 1) pWins[pId] = (pWins[pId] || 0) + 1;
+    });
+  });
+
+  let bestP = null;
+  let bestRate = -1;
+  Object.keys(pPicks).forEach(pId => {
+    const played = pPicks[pId];
+    if (played >= 2) {
+      const wins = pWins[pId] || 0;
+      const rate = (wins / played) * 100;
+      if (rate > bestRate) {
+        bestRate = rate;
+        bestP = { id: pId, rate: Math.round(rate), wins, played };
+      }
+    }
+  });
+
+  const bestPlayerEl = document.getElementById('stat-best-winrate-player');
+  const bestWinPctEl = document.getElementById('stat-best-winrate-pct');
+  const bestDetailEl = document.getElementById('stat-best-winrate-detail');
+  if (bestPlayerEl) {
+    if (bestP && data.players && data.players[bestP.id]) {
+      const p = data.players[bestP.id];
+      bestPlayerEl.textContent = p.nickname || p.name;
+      bestWinPctEl.textContent = `${bestP.rate}% win rate`;
+      bestDetailEl.textContent = `${bestP.wins} victorias en ${bestP.played} partidas`;
+    } else {
+      bestPlayerEl.textContent = 'En competencia';
+      bestWinPctEl.textContent = '-';
+      bestDetailEl.textContent = 'Mínimo 2 partidas para calcular racha';
+    }
   }
 }
 

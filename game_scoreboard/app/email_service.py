@@ -116,7 +116,16 @@ def clear_email_logs():
 # -----------------------------------------------------------------------------
 # LOW-LEVEL SMTP SENDER
 # -----------------------------------------------------------------------------
-def send_mime_message(recipients: List[str], subject: str, html_body: str, plain_body: str, trigger_type: str = "custom", banner_file: Optional[Path] = None, override_config: Optional[Dict[str, Any]] = None):
+def send_mime_message(
+    recipients: List[str],
+    subject: str,
+    html_body: str,
+    plain_body: str,
+    trigger_type: str = "custom",
+    banner_file: Optional[Path] = None,
+    override_config: Optional[Dict[str, Any]] = None,
+    extra_inline_images: Optional[Dict[str, Path]] = None
+):
     """
     Connect to SMTP and deliver email to recipients, recording status in email_logs.
     """
@@ -165,6 +174,20 @@ def send_mime_message(recipients: List[str], subject: str, html_body: str, plain
                 msg_root.attach(img_part)
         except Exception as e:
             print(f"[EmailService] Could not attach banner: {e}")
+
+    # Attach any extra inline images (e.g. monthly evolution chart)
+    if extra_inline_images:
+        for cid_key, path_obj in extra_inline_images.items():
+            if path_obj and path_obj.exists():
+                try:
+                    subtype = "png" if path_obj.suffix.lower() == ".png" else "jpeg"
+                    with open(path_obj, "rb") as f:
+                        part = MIMEImage(f.read(), _subtype=subtype)
+                        part.add_header("Content-ID", f"<{cid_key}>")
+                        part.add_header("Content-Disposition", "inline", filename=path_obj.name)
+                        msg_root.attach(part)
+                except Exception as e:
+                    print(f"[EmailService] Could not attach inline image {cid_key}: {e}")
 
     try:
         server = smtplib.SMTP(smtp_host, smtp_port, timeout=12)
@@ -498,8 +521,16 @@ def execute_automation(automation: Dict[str, Any], context: Optional[Dict[str, A
     # Render Subject & Body based on content_type
     subject = template.get("subject_template") or "Reporte de Game Scoreboard"
     month_name = datetime.now().strftime("%B %Y")
+    extra_inline_images: Dict[str, Path] = {}
 
-    if content_type == "session_summary" and context and "session" in context:
+    if template.get("id") == "monthly_mario_kart" or (content_type == "monthly_summary" and "mario" in str(template.get("id", "")).lower()):
+        subject = subject.replace("{{session_title}}", "Resumen Mensual")
+        subject = subject.replace("{{game_name}}", "Mario Kart 8 Deluxe")
+        subject = subject.replace("{{month}}", month_name)
+        html_body, plain_body, chart_file = render_monthly_mario_kart_email(template)
+        if chart_file and chart_file.exists():
+            extra_inline_images["monthly_chart"] = chart_file
+    elif content_type == "session_summary" and context and "session" in context:
         s = context["session"]
         subject = subject.replace("{{session_title}}", s.get("title", "Sesión de Juego"))
         subject = subject.replace("{{game_name}}", s.get("game_name", "Videojuego"))
@@ -531,7 +562,8 @@ def execute_automation(automation: Dict[str, Any], context: Optional[Dict[str, A
         html_body=html_body,
         plain_body=plain_body,
         trigger_type=automation.get("trigger_type", "automation"),
-        banner_file=banner_file
+        banner_file=banner_file,
+        extra_inline_images=extra_inline_images
     )
 
     # Update last_triggered_at
@@ -863,3 +895,320 @@ def render_global_digest_email(template: Dict[str, Any], content_type: str) -> t
 
     plain = f"{title}\n" + "\n".join([f"{p['name']}: {p['wins']} vic, {p['total_score']} pts" for p in lb])
     return html, plain
+
+
+def generate_evolution_chart_image(timeline: List[Dict[str, Any]], players_map: Dict[int, Dict[str, Any]], title: str = "Evolución de Puntos por Partida") -> Optional[Path]:
+    """Generate high-contrast dark-mode evolution line chart for emails using Pillow."""
+    if not timeline:
+        return None
+
+    try:
+        from PIL import Image, ImageDraw
+
+        w, h = 1000, 440
+        img = Image.new("RGB", (w, h), color="#0b1329")
+        draw = ImageDraw.Draw(img)
+
+        pad_left, pad_right, pad_top, pad_bottom = 65, 45, 65, 55
+        plot_w = w - pad_left - pad_right
+        plot_h = h - pad_top - pad_bottom
+
+        # Background plot area
+        draw.rounded_rectangle([(pad_left, pad_top), (w - pad_right, h - pad_bottom)], radius=12, fill="#0f172a", outline="#1e293b", width=1)
+
+        # Title
+        draw.text((pad_left, 22), f"📈 {title}", fill="#ffffff")
+
+        vibrant_palette = ["#6366f1", "#ec4899", "#10b981", "#f59e0b", "#38bdf8", "#a855f7", "#ef4444"]
+
+        participating_ids = set()
+        for t in timeline:
+            for p_str in t.get("scores", {}).keys():
+                participating_ids.add(int(p_str))
+
+        if not participating_ids:
+            return None
+
+        player_lines = {}
+        for idx, p_id in enumerate(participating_ids):
+            p_info = players_map.get(p_id, {})
+            p_name = p_info.get("nickname") or p_info.get("name") or f"P{p_id}"
+            color = p_info.get("color_hex") or vibrant_palette[idx % len(vibrant_palette)]
+
+            pts = []
+            for t in timeline:
+                sc_info = t.get("scores", {}).get(str(p_id))
+                pts.append(float(sc_info["score"]) if sc_info else 0.0)
+            player_lines[p_id] = {
+                "name": p_name,
+                "color": color,
+                "points": pts,
+                "max": max(pts) if pts else 0
+            }
+
+        max_score = max([max(pl["points"]) for pl in player_lines.values()] + [10.0])
+        max_y_val = max(100.0, ((int(max_score) // 50) + 1) * 50.0)
+
+        # Horizontal grid lines
+        for step in range(5):
+            val = (max_y_val / 4) * step
+            y_pos = pad_top + plot_h - int((val / max_y_val) * plot_h)
+            draw.line([(pad_left, y_pos), (w - pad_right, y_pos)], fill="#1e293b", width=1)
+            draw.text((pad_left - 45, y_pos - 7), f"{int(val)}", fill="#64748b")
+
+        n_pts = len(timeline)
+        xs = [pad_left + int(i * plot_w / max(1, n_pts - 1)) for i in range(n_pts)] if n_pts > 1 else [pad_left + plot_w // 2]
+
+        def get_y(val):
+            return pad_top + plot_h - int((val / max_y_val) * plot_h)
+
+        leg_idx = 0
+        for p_id, pl in player_lines.items():
+            pts = pl["points"]
+            c = pl["color"]
+
+            if n_pts > 1:
+                for i in range(n_pts - 1):
+                    draw.line([(xs[i], get_y(pts[i])), (xs[i+1], get_y(pts[i+1]))], fill=c, width=3)
+
+            for i in range(n_pts):
+                cx, cy = xs[i], get_y(pts[i])
+                draw.ellipse([(cx - 4, cy - 4), (cx + 4, cy + 4)], fill=c, outline="#ffffff", width=1)
+
+            lx = 380 + (leg_idx * 140)
+            if lx + 110 < w:
+                draw.rounded_rectangle([(lx, 24), (lx + 10, 34)], radius=3, fill=c)
+                draw.text((lx + 15, 22), pl["name"][:11], fill="#cbd5e1")
+                leg_idx += 1
+
+        step_x = max(1, n_pts // 6)
+        for i in range(0, n_pts, step_x):
+            lbl = timeline[i].get("label", f"#{i+1}")
+            draw.text((xs[i] - 12, h - pad_bottom + 10), lbl, fill="#64748b")
+
+        out_path = BASE_DIR / "static" / "img" / "cache_monthly_chart.png"
+        img.save(out_path, "PNG", optimize=True)
+        return out_path
+    except Exception as e:
+        print(f"[EmailService] Could not generate chart image: {e}")
+        return None
+
+
+def render_monthly_mario_kart_email(template: Dict[str, Any], month: Optional[str] = None) -> tuple:
+    """Render Mario Kart Monthly Digest with KPIs, podium, inline evolution chart, standings and character meta."""
+    from routers.stats import get_timeline, get_leaderboard
+
+    current_month_str = month or datetime.now().strftime("%Y-%m")
+    try:
+        month_display = datetime.strptime(current_month_str, "%Y-%m").strftime("%B %Y")
+    except Exception:
+        month_display = current_month_str
+
+    timeline_data = get_timeline(game_id="mario_kart", include_practice=False, month=current_month_str)
+    timeline = timeline_data.get("timeline", [])
+    players_map = timeline_data.get("players", {})
+    record_score = timeline_data.get("record_score")
+    char_stats = timeline_data.get("character_stats", [])
+    total_matches = timeline_data.get("total_matches", 0)
+
+    # Leaderboard for the month / game
+    lb = get_leaderboard(game_id="mario_kart_8", include_practice=False)
+
+    # Generate Chart
+    chart_file = generate_evolution_chart_image(
+        timeline=timeline,
+        players_map=players_map,
+        title=f"Evolución de Puntos - Mario Kart 8 ({month_display})"
+    )
+
+    # 1. KPIs
+    top_winner = lb[0] if lb else None
+    top_char = char_stats[0] if char_stats else None
+
+    kpis_html = f"""
+    <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; margin-bottom: 20px;">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+          <td style="width: 25%; text-align: center; padding: 6px; border-right: 1px solid #1e293b;">
+            <div style="color: #64748b; font-size: 10px; text-transform: uppercase; font-weight: bold;">🏁 Carreras</div>
+            <div style="color: #ffffff; font-size: 18px; font-weight: 800; margin-top: 2px;">{total_matches}</div>
+            <div style="color: #10b981; font-size: 10px;">Partidas del mes</div>
+          </td>
+          <td style="width: 25%; text-align: center; padding: 6px; border-right: 1px solid #1e293b;">
+            <div style="color: #64748b; font-size: 10px; text-transform: uppercase; font-weight: bold;">🏆 Líder</div>
+            <div style="color: #fbbf24; font-size: 16px; font-weight: 800; margin-top: 2px;">{top_winner['name'] if top_winner else '-'}</div>
+            <div style="color: #94a3b8; font-size: 10px;">{top_winner['wins'] if top_winner else 0} vic ({top_winner['win_rate'] if top_winner else 0}%)</div>
+          </td>
+          <td style="width: 25%; text-align: center; padding: 6px; border-right: 1px solid #1e293b;">
+            <div style="color: #64748b; font-size: 10px; text-transform: uppercase; font-weight: bold;">⚡ Récord Partida</div>
+            <div style="color: #38bdf8; font-size: 16px; font-weight: 800; margin-top: 2px;">{int(record_score['score']) if record_score else 0} pts</div>
+            <div style="color: #94a3b8; font-size: 10px;">{record_score['player_name'] if record_score else '-'}</div>
+          </td>
+          <td style="width: 25%; text-align: center; padding: 6px;">
+            <div style="color: #64748b; font-size: 10px; text-transform: uppercase; font-weight: bold;">🏎️ Meta Personaje</div>
+            <div style="color: #ec4899; font-size: 15px; font-weight: 800; margin-top: 2px;">{top_char['character'] if top_char else '-'}</div>
+            <div style="color: #94a3b8; font-size: 10px;">{top_char['wins'] if top_char else 0} vic ({top_char['win_rate'] if top_char else 0}%)</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+    """
+
+    # 2. Podium
+    podium_html = ""
+    if template.get("include_podium") and len(lb) > 0:
+        p1 = lb[0] if len(lb) > 0 else None
+        p2 = lb[1] if len(lb) > 1 else None
+        p3 = lb[2] if len(lb) > 2 else None
+        podium_html = f"""
+        <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 16px; margin-bottom: 20px; text-align: center;">
+          <h4 style="color: #fbbf24; font-size: 13px; text-transform: uppercase; margin: 0 0 12px 0;">👑 Podio del Mes 👑</h4>
+          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td style="width: 33%; text-align: center; vertical-align: bottom; padding: 8px;">
+                {f'<div style="font-size: 20px;">🥈</div><strong style="color: #cbd5e1; font-size: 13px; display: block;">{p2["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{int(p2["total_score"])} pts ({p2["wins"]} vic)</span>' if p2 else ''}
+              </td>
+              <td style="width: 34%; text-align: center; vertical-align: bottom; padding: 8px; border-left: 1px solid #1e293b; border-right: 1px solid #1e293b;">
+                {f'<div style="font-size: 28px;">🥇</div><strong style="color: #fbbf24; font-size: 15px; display: block;">{p1["name"]}</strong><span style="color: #fde68a; font-size: 12px; font-weight: bold;">{int(p1["total_score"])} pts ({p1["wins"]} vic)</span>' if p1 else ''}
+              </td>
+              <td style="width: 33%; text-align: center; vertical-align: bottom; padding: 8px;">
+                {f'<div style="font-size: 20px;">🥉</div><strong style="color: #d97706; font-size: 13px; display: block;">{p3["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{int(p3["total_score"])} pts</span>' if p3 else ''}
+              </td>
+            </tr>
+          </table>
+        </div>
+        """
+
+    # 3. Evolution Chart HTML
+    chart_html = ""
+    if chart_file and chart_file.exists():
+        chart_html = f"""
+        <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; margin-bottom: 20px; text-align: center;">
+          <h3 style="color: #e2e8f0; font-size: 12px; text-transform: uppercase; margin: 0 0 10px 0; text-align: left;">📈 Evolución de Puntos vs Tiempo</h3>
+          <img src="cid:monthly_chart" alt="Evolución vs Tiempo" width="550" style="width: 100%; max-width: 550px; height: auto; display: block; border-radius: 10px; margin: 0 auto;" />
+        </div>
+        """
+    else:
+        chart_html = """
+        <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 16px; margin-bottom: 20px; text-align: center;">
+          <h3 style="color: #e2e8f0; font-size: 12px; text-transform: uppercase; margin: 0 0 6px 0; text-align: left;">📈 Evolución de Puntos vs Tiempo</h3>
+          <p style="color: #64748b; font-size: 12px; margin: 0;">Se registrará la gráfica de evolución a medida que jueguen partidas oficiales en el mes.</p>
+        </div>
+        """
+
+    # 4. Standings rows
+    standings_rows = ""
+    if template.get("include_standings"):
+        for idx, p in enumerate(lb, start=1):
+            medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}º"))
+            standings_rows += f"""
+            <tr style="border-bottom: 1px solid #1e293b;">
+              <td style="padding: 8px 12px; text-align: center; font-weight: bold; color: #fbbf24;">{medal}</td>
+              <td style="padding: 8px 12px; color: #ffffff; font-size: 13px;"><strong>{p['name']}</strong> <span style="color: #64748b; font-size: 11px;">@{p.get('nickname') or ''}</span></td>
+              <td style="padding: 8px 12px; text-align: center; color: #10b981; font-weight: bold;">{p['wins']}</td>
+              <td style="padding: 8px 12px; text-align: center; color: #94a3b8;">{p['matches_played']}</td>
+              <td style="padding: 8px 12px; text-align: center; color: #f59e0b;">{p['win_rate']}%</td>
+              <td style="padding: 8px 12px; text-align: right; color: #fbbf24; font-weight: 800;">{int(p['total_score'])} pts</td>
+            </tr>
+            """
+
+    # 5. Characters meta table
+    meta_rows = ""
+    if template.get("include_metrics") and char_stats:
+        for idx, c in enumerate(char_stats[:6], start=1):
+            meta_rows += f"""
+            <tr style="border-bottom: 1px solid #14203d;">
+              <td style="padding: 7px 10px; color: #ffffff; font-size: 12px;"><strong>🏎️ {c['character']}</strong></td>
+              <td style="padding: 7px 10px; text-align: center; color: #cbd5e1; font-size: 12px;">{c['picks']}</td>
+              <td style="padding: 7px 10px; text-align: center; color: #10b981; font-weight: bold; font-size: 12px;">{c['wins']}</td>
+              <td style="padding: 7px 10px; text-align: right; color: #a5b4fc; font-weight: bold; font-size: 12px;">{c['win_rate']}%</td>
+            </tr>
+            """
+
+    meta_section = f"""
+    <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; margin-bottom: 20px;">
+      <h3 style="color: #e2e8f0; font-size: 12px; text-transform: uppercase; margin: 0 0 10px 0;">🏎️ Meta del Mes: Personajes Más Efectivos</h3>
+      <table border="0" cellpadding="0" cellspacing="0" width="100%">
+        <thead>
+          <tr style="border-bottom: 1px solid #1e293b; color: #64748b; font-size: 10px; text-transform: uppercase;">
+            <th style="padding: 6px 10px; text-align: left;">Personaje</th>
+            <th style="padding: 6px 10px; text-align: center;">Carreras</th>
+            <th style="padding: 6px 10px; text-align: center;">Victorias</th>
+            <th style="padding: 6px 10px; text-align: right;">Efectividad (Win%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {meta_rows}
+        </tbody>
+      </table>
+    </div>
+    """ if meta_rows else ""
+
+    # Assemble HTML
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <title>Resumen Mensual Mario Kart 8</title>
+    </head>
+    <body style="margin: 0; padding: 20px; background-color: #020617; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc;">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        <tr>
+          <td style="padding: 0; text-align: center; background-color: #090d16;">
+            <img src="cid:tournament_banner" alt="Mario Kart 8 Deluxe" width="600" style="width: 100%; max-width: 600px; height: auto; display: block; border-top-left-radius: 20px; border-top-right-radius: 20px; margin: 0 auto;" />
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 24px;">
+            <div style="color: #818cf8; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">
+              🏁 Resumen Mensual · {month_display}
+            </div>
+            <h1 style="color: #ffffff; font-size: 22px; font-weight: 800; margin: 0 0 6px 0;">
+              Mario Kart 8 Deluxe Championship
+            </h1>
+            <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin: 0 0 18px 0;">
+              {template.get('intro_text', 'Resumen mensual con estadísticas, podio, evolución y análisis meta:')}
+            </p>
+
+            {kpis_html}
+
+            {podium_html}
+
+            {chart_html}
+
+            {f'''
+            <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; margin-bottom: 20px;">
+              <h3 style="color: #e2e8f0; font-size: 12px; text-transform: uppercase; margin: 0 0 10px 0;">📊 Tabla Acumulada del Mes</h3>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <thead>
+                  <tr style="border-bottom: 1px solid #1e293b; color: #64748b; font-size: 11px; text-transform: uppercase;">
+                    <th style="padding: 6px 12px; text-align: center;">Pos</th>
+                    <th style="padding: 6px 12px; text-align: left;">Jugador</th>
+                    <th style="padding: 6px 12px; text-align: center;">Vic</th>
+                    <th style="padding: 6px 12px; text-align: center;">Partidas</th>
+                    <th style="padding: 6px 12px; text-align: center;">Win%</th>
+                    <th style="padding: 6px 12px; text-align: right;">Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {standings_rows}
+                </tbody>
+              </table>
+            </div>
+            ''' if standings_rows else ''}
+
+            {meta_section}
+
+            <p style="color: #64748b; font-size: 11px; text-align: center; margin: 24px 0 0 0; border-top: 1px solid #1e293b; padding-top: 14px;">
+              {template.get('footer_text', 'Game Scoreboard · Torneo de Amigos')}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    plain = f"Resumen Mensual Mario Kart 8 ({month_display})\n" + "\n".join([f"{p['name']}: {p['wins']} vic, {p['total_score']} pts" for p in lb])
+    return html, plain, chart_file

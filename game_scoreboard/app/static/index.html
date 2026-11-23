@@ -16,7 +16,9 @@
     }
   </script>
   <!-- Local Critical CSS First -->
-  <link rel="stylesheet" href="static/css/styles.css?v=1.0.12">
+  <link rel="stylesheet" href="static/css/styles.css?v=1.0.13">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -58,7 +60,7 @@
           <div>
             <div class="flex items-center gap-1.5">
               <span class="text-sm sm:text-base font-black tracking-tight text-white">Game Scoreboard</span>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.0.12</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.0.13</span>
             </div>
             <p class="text-[10px] sm:text-xs text-slate-400">Torneos y Partidas entre Amigos</p>
           </div>
@@ -151,6 +153,70 @@
           <span>🏆</span> Podio de Campeones
         </h3>
         <div class="grid grid-cols-3 gap-2 sm:gap-4 items-end max-w-lg mx-auto pt-4 pb-2" id="dash-podium">
+        </div>
+      </div>
+
+      <!-- Evolution Chart vs Time -->
+      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-5 shadow-lg space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl">📈</span>
+            <div>
+              <h2 class="text-sm sm:text-base font-bold text-white">Evolución de Puntuaciones en el Tiempo</h2>
+              <p class="text-[11px] text-slate-400">Progresión y tendencias entre partidas y sesiones de juego.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800 text-xs">
+              <button type="button" id="chart-mode-cumulative" onclick="switchChartMode('cumulative')" class="px-2.5 py-1 rounded-lg font-semibold text-indigo-400 bg-slate-800 transition">Acumulado</button>
+              <button type="button" id="chart-mode-match" onclick="switchChartMode('match')" class="px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition">Por Partida</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="relative w-full h-64 sm:h-80" id="dash-chart-container">
+          <canvas id="dash-evolution-chart"></canvas>
+          <div id="dash-chart-empty" class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-slate-950/60 rounded-xl">
+            <span class="text-3xl mb-1.5">🏁</span>
+            <p class="text-xs text-slate-300 font-medium">Aún no hay suficientes partidas registradas para graficar la evolución.</p>
+            <p class="text-[10px] text-slate-500 mt-1">Registra partidas oficiales para ver la curva de rendimiento.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced Stats: Records & Meta Highlights -->
+      <div id="dash-advanced-stats" class="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-4">
+        <!-- Record Match -->
+        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-start gap-3">
+          <div class="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 text-xl flex-shrink-0">⚡</div>
+          <div class="space-y-1 min-w-0 flex-1">
+            <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Récord en una Partida</div>
+            <div class="text-base sm:text-lg font-black text-white truncate" id="stat-record-player">-</div>
+            <div class="text-xs font-bold text-amber-400" id="stat-record-score">0 pts</div>
+            <div class="text-[10px] text-slate-500 truncate" id="stat-record-detail">Partida competitiva</div>
+          </div>
+        </div>
+
+        <!-- Top Character / Meta -->
+        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-start gap-3">
+          <div class="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 text-xl flex-shrink-0">🏎️</div>
+          <div class="space-y-1 min-w-0 flex-1">
+            <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Personaje Más Ganador</div>
+            <div class="text-base sm:text-lg font-black text-white truncate" id="stat-top-char">-</div>
+            <div class="text-xs font-bold text-indigo-400" id="stat-top-char-wins">0 victorias</div>
+            <div class="text-[10px] text-slate-500 truncate" id="stat-top-char-winrate">Efectividad: 0%</div>
+          </div>
+        </div>
+
+        <!-- Best Win Rate Player -->
+        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-start gap-3">
+          <div class="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-xl flex-shrink-0">🔥</div>
+          <div class="space-y-1 min-w-0 flex-1">
+            <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Mejor Efectividad (Win Rate)</div>
+            <div class="text-base sm:text-lg font-black text-white truncate" id="stat-best-winrate-player">-</div>
+            <div class="text-xs font-bold text-emerald-400" id="stat-best-winrate-pct">0%</div>
+            <div class="text-[10px] text-slate-500 truncate" id="stat-best-winrate-detail">Porcentaje de primeros lugares</div>
+          </div>
         </div>
       </div>
 
@@ -905,6 +971,6 @@
   </div>
 
   <!-- JavaScript Code: loaded with relative path supported by <base> -->
-  <script src="static/js/app.js?v=1.0.12"></script>
+  <script src="static/js/app.js?v=1.0.13"></script>
 </body>
 </html>

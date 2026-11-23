@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any, Optional
 from database import get_db_connection
@@ -156,3 +157,141 @@ def get_recent_matches(limit: int = 10):
 
     conn.close()
     return result
+
+
+@router.get("/timeline")
+def get_timeline(game_id: Optional[str] = None, include_practice: bool = False, month: Optional[str] = None):
+    """
+    Get chronological score evolution across matches & sessions, plus meta records and character stats.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    query = """
+    SELECT 
+        m.id AS match_id,
+        m.session_id,
+        m.match_number,
+        m.match_type,
+        m.rule_values_json,
+        m.is_practice,
+        m.played_at,
+        s.title AS session_title,
+        s.started_at AS session_date,
+        s.game_id,
+        g.name AS game_name,
+        g.icon AS game_icon
+    FROM matches m
+    JOIN sessions s ON m.session_id = s.id
+    JOIN games g ON s.game_id = g.id
+    WHERE 1=1
+    """
+    params = []
+    if not include_practice:
+        query += " AND m.is_practice = 0"
+    if game_id:
+        query += " AND (s.game_id = ? OR s.game_id LIKE ?)"
+        params.extend([game_id, f"%{game_id}%"])
+    if month:
+        query += " AND strftime('%Y-%m', m.played_at) = ?"
+        params.append(month)
+
+    query += " ORDER BY m.played_at ASC, m.id ASC"
+    cursor.execute(query, params)
+    matches_rows = cursor.fetchall()
+
+    # Players map
+    cursor.execute("SELECT id, name, nickname, avatar_url, color_hex FROM players")
+    players_map = {row["id"]: dict(row) for row in cursor.fetchall()}
+
+    timeline_points = []
+    player_cum_scores = {p_id: 0.0 for p_id in players_map}
+    character_counter = {}
+    record_score = {"player_name": None, "player_nickname": None, "score": 0.0, "match_title": None, "date": None, "character": None}
+
+    for idx, m in enumerate(matches_rows, start=1):
+        m_id = m["match_id"]
+        cursor.execute("""
+        SELECT ms.*, p.name AS player_name, p.nickname AS player_nickname, p.color_hex
+        FROM match_scores ms
+        JOIN players p ON ms.player_id = p.id
+        WHERE ms.match_id = ?
+        ORDER BY ms.rank_position ASC, ms.score DESC
+        """, (m_id,))
+        scores_rows = cursor.fetchall()
+
+        scores_by_player = {}
+        for sc in scores_rows:
+            p_id = sc["player_id"]
+            sc_val = sc["score"]
+            rank_val = sc["rank_position"]
+            metrics = json.loads(sc["metrics_json"] or "{}")
+            char_name = metrics.get("character")
+            kart_name = metrics.get("kart")
+
+            player_cum_scores[p_id] = round(player_cum_scores[p_id] + sc_val, 1)
+
+            scores_by_player[str(p_id)] = {
+                "score": sc_val,
+                "cumulative_score": player_cum_scores[p_id],
+                "rank": rank_val,
+                "character": char_name,
+                "kart": kart_name
+            }
+
+            # Track records
+            if sc_val > record_score["score"]:
+                record_score = {
+                    "player_name": sc["player_name"],
+                    "player_nickname": sc["player_nickname"],
+                    "score": sc_val,
+                    "match_title": f"{m['session_title']} - P#{m['match_number']}",
+                    "date": str(m["played_at"])[:10] if m["played_at"] else "",
+                    "character": char_name
+                }
+
+            # Track character meta
+            if char_name:
+                if char_name not in character_counter:
+                    character_counter[char_name] = {"character": char_name, "picks": 0, "wins": 0, "total_score": 0.0}
+                character_counter[char_name]["picks"] += 1
+                character_counter[char_name]["total_score"] += sc_val
+                if rank_val == 1:
+                    character_counter[char_name]["wins"] += 1
+
+        date_str = str(m["played_at"])[:10] if m["played_at"] else str(m["session_date"])[:10]
+        timeline_points.append({
+            "match_id": m_id,
+            "match_number": m["match_number"],
+            "session_id": m["session_id"],
+            "session_title": m["session_title"],
+            "game_id": m["game_id"],
+            "game_name": m["game_name"],
+            "date": date_str,
+            "label": f"#{m['match_number']} ({date_str[5:] if len(date_str) >= 5 else date_str})",
+            "scores": scores_by_player
+        })
+
+    # Character stats list
+    char_stats = []
+    for c_name, c_data in character_counter.items():
+        win_rate = round(c_data["wins"] / c_data["picks"] * 100, 1) if c_data["picks"] > 0 else 0.0
+        avg_score = round(c_data["total_score"] / c_data["picks"], 1) if c_data["picks"] > 0 else 0.0
+        char_stats.append({
+            "character": c_name,
+            "picks": c_data["picks"],
+            "wins": c_data["wins"],
+            "win_rate": win_rate,
+            "avg_score": avg_score
+        })
+    char_stats.sort(key=lambda x: (x["wins"], x["picks"], x["avg_score"]), reverse=True)
+
+    conn.close()
+
+    return {
+        "timeline": timeline_points,
+        "players": players_map,
+        "record_score": record_score if record_score["score"] > 0 else None,
+        "character_stats": char_stats,
+        "total_matches": len(timeline_points)
+    }

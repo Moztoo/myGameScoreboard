@@ -394,3 +394,28 @@ def test_email_settings_and_test_trigger():
     # Delete
     del_res = client.delete(f"/api/settings/automations/{auto_id}")
     assert del_res.status_code == 200
+
+
+def test_monthly_mario_kart_template_and_timeline_stats():
+    """Verify monthly_mario_kart template existence, /api/stats/timeline, and monthly email render."""
+    from email_service import get_email_template, render_monthly_mario_kart_email
+
+    # 1. Template check
+    mk_monthly = get_email_template("monthly_mario_kart")
+    assert mk_monthly is not None
+    assert "Mario Kart" in mk_monthly["name"]
+    assert mk_monthly["banner_url"] == "static/img/banner_mario_kart.jpg"
+
+    # 2. Timeline API check
+    tl_res = client.get("/api/stats/timeline")
+    assert tl_res.status_code == 200
+    data = tl_res.json()
+    assert "timeline" in data
+    assert "character_stats" in data
+    assert "players" in data
+
+    # 3. Monthly email render check
+    html, plain, chart_file = render_monthly_mario_kart_email(mk_monthly)
+    assert "Mario Kart 8 Deluxe" in html
+    assert "cid:tournament_banner" in html
+    assert "Resumen Mensual" in plain
