@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 import json
 from database import get_db_connection
 from models import SessionCreate, SessionUpdate, MatchCreate
-from email_service import send_session_report_email
+from email_service import trigger_session_finished_automations
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -245,7 +245,7 @@ def update_session(session_id: int, data: SessionUpdate, background_tasks: Backg
         WHERE id = ?
         """, (title, notes, status, session_id))
         if existing["status"] != "completed":
-            background_tasks.add_task(send_session_report_email, session_id)
+            background_tasks.add_task(trigger_session_finished_automations, session_id)
     elif status == "active":
         cursor.execute("""
         UPDATE sessions SET title = ?, notes = ?, status = 'active', ended_at = NULL

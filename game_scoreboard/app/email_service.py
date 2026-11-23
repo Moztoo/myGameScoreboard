@@ -2,6 +2,7 @@ import os
 import json
 import smtplib
 from pathlib import Path
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -10,9 +11,12 @@ from email.mime.image import MIMEImage
 from database import DATA_DIR, BASE_DIR, get_db_connection
 
 EMAIL_CONFIG_FILE = DATA_DIR / "email_config.json"
-BANNER_IMAGE_PATH = BASE_DIR / "static" / "img" / "email_banner.jpg"
+DEFAULT_BANNER_PATH = BASE_DIR / "static" / "img" / "email_banner.jpg"
 
 
+# -----------------------------------------------------------------------------
+# CONFIGURATION
+# -----------------------------------------------------------------------------
 def get_email_config() -> Dict[str, Any]:
     """Retrieve saved email configuration, or sensible defaults."""
     default_config = {
@@ -38,13 +42,11 @@ def save_email_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """Save email configuration to disk."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     existing = get_email_config()
-    
-    # Don't overwrite password with masked value if user didn't change it
+
     new_pw = (config.get("smtp_password") or "").strip()
     if not new_pw or new_pw == "********":
         config["smtp_password"] = existing.get("smtp_password", "")
     else:
-        # Strip spaces (Google app passwords often come with spaces like 'abcd efgh ijkl mnop')
         config["smtp_password"] = new_pw.replace(" ", "")
 
     existing.update(config)
@@ -69,9 +71,54 @@ def get_public_email_config() -> Dict[str, Any]:
     }
 
 
-def send_test_email(override_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+# -----------------------------------------------------------------------------
+# LOGGING
+# -----------------------------------------------------------------------------
+def log_email(recipient: str, subject: str, trigger_type: str, status: str, error_message: Optional[str] = None):
+    """Save an email attempt record into email_logs."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+        INSERT INTO email_logs (recipient, subject, trigger_type, status, error_message)
+        VALUES (?, ?, ?, ?, ?)
+        """, (recipient, subject, trigger_type, status, error_message))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[EmailService] Error writing email log: {e}")
+
+
+def get_email_logs(limit: int = 50) -> List[Dict[str, Any]]:
+    """Fetch recent email logs."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT id, recipient, subject, trigger_type, status, error_message, created_at
+    FROM email_logs
+    ORDER BY id DESC
+    LIMIT ?
+    """, (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def clear_email_logs():
+    """Clear all email logs."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM email_logs")
+    conn.commit()
+    conn.close()
+
+
+# -----------------------------------------------------------------------------
+# LOW-LEVEL SMTP SENDER
+# -----------------------------------------------------------------------------
+def send_mime_message(recipients: List[str], subject: str, html_body: str, plain_body: str, trigger_type: str = "custom", banner_file: Optional[Path] = None, override_config: Optional[Dict[str, Any]] = None):
     """
-    Send a test email ONLY to players that have an email registered.
+    Connect to SMTP and deliver email to recipients, recording status in email_logs.
     """
     cfg = get_email_config()
     if override_config:
@@ -90,96 +137,104 @@ def send_test_email(override_config: Optional[Dict[str, Any]] = None) -> Dict[st
     use_tls = cfg.get("use_tls", True)
 
     if not sender_email or not smtp_password:
-        raise ValueError("Configuración incompleta: Ingresa el correo remitente y la contraseña de aplicación de Google.")
+        raise ValueError("Configuración SMTP incompleta: Ingresa tu correo remitente y la contraseña de aplicación de Google.")
 
-    # 1. Fetch only players with registered email
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-    SELECT id, name, nickname, email, color_hex
-    FROM players
-    WHERE email IS NOT NULL AND TRIM(email) != ''
-    ORDER BY name ASC
-    """)
-    players_with_email = [dict(r) for r in cursor.fetchall()]
-    conn.close()
+    if not recipients:
+        raise ValueError("No hay destinatarios especificados para enviar el correo.")
 
-    if not players_with_email:
-        raise ValueError("No se encontraron jugadores con correo registrado. Agrega o edita el perfil de al menos un jugador en la pestaña 'Jugadores'.")
+    msg_root = MIMEMultipart("related")
+    msg_root["Subject"] = subject
+    msg_root["From"] = f"{sender_name} <{sender_email}>"
+    msg_root["To"] = ", ".join(recipients)
 
-    recipients = [(p.get("email") or "").strip() for p in players_with_email if (p.get("email") or "").strip()]
+    msg_alternative = MIMEMultipart("alternative")
+    msg_root.attach(msg_alternative)
 
-    # 2. Build HTML Body
-    players_list_html = "".join([
-        f"""
-        <tr style="border-bottom: 1px solid #1e293b;">
-          <td style="padding: 10px 12px; display: flex; align-items: center;">
-            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: {p.get('color_hex', '#6366f1')}; margin-right: 8px;"></span>
-            <strong style="color: #ffffff; font-size: 14px;">{p['name']}</strong>
-            <span style="color: #818cf8; font-size: 12px; margin-left: 6px;">@{p.get('nickname') or 'player'}</span>
-          </td>
-          <td style="padding: 10px 12px; text-align: right; color: #94a3b8; font-size: 13px;">
-            {p['email']}
-          </td>
-        </tr>
-        """
-        for p in players_with_email
-    ])
+    msg_alternative.attach(MIMEText(plain_body, "plain", "utf-8"))
+    msg_alternative.attach(MIMEText(html_body, "html", "utf-8"))
+
+    # Attach banner if specified or available
+    img_to_attach = banner_file if (banner_file and banner_file.exists()) else (DEFAULT_BANNER_PATH if DEFAULT_BANNER_PATH.exists() else None)
+    if img_to_attach and img_to_attach.exists():
+        try:
+            with open(img_to_attach, "rb") as img_f:
+                img_part = MIMEImage(img_f.read(), _subtype="jpeg")
+                img_part.add_header("Content-ID", "<tournament_banner>")
+                img_part.add_header("Content-Disposition", "inline", filename="banner.jpg")
+                msg_root.attach(img_part)
+        except Exception as e:
+            print(f"[EmailService] Could not attach banner: {e}")
+
+    try:
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=12)
+        if use_tls:
+            server.starttls()
+        server.login(sender_email, smtp_password)
+        server.sendmail(sender_email, recipients, msg_root.as_string())
+        server.quit()
+
+        # Log successes
+        for r in recipients:
+            log_email(recipient=r, subject=subject, trigger_type=trigger_type, status="sent")
+
+        return {"status": "ok", "recipients": recipients}
+    except Exception as e:
+        error_msg = str(e)
+        for r in recipients:
+            log_email(recipient=r, subject=subject, trigger_type=trigger_type, status="failed", error_message=error_msg)
+        raise
+
+
+# -----------------------------------------------------------------------------
+# TEST EMAIL (TARGETED MANUAL EMAIL)
+# -----------------------------------------------------------------------------
+def send_test_email(target_email: str, override_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Send a test email ONLY to a single specified target email address for debugging.
+    """
+    target = (target_email or "").strip()
+    if not target or "@" not in target:
+        raise ValueError("Ingresa una dirección de correo válida para realizar la prueba.")
+
+    subject = "🎮 Game Scoreboard: Prueba de Conexión SMTP Exitosa 🏁"
 
     html_content = f"""
     <!DOCTYPE html>
     <html lang="es">
     <head>
       <meta charset="UTF-8">
-      <title>Game Scoreboard - Prueba Exitosa</title>
+      <title>Prueba de Conexión</title>
     </head>
     <body style="margin: 0; padding: 20px; background-color: #020617; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc;">
       <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-        <!-- Banner Header -->
         <tr>
           <td style="padding: 0; text-align: center; background-color: #090d16;">
             <img src="cid:tournament_banner" alt="Game Scoreboard" style="width: 100%; max-width: 600px; height: auto; display: block;" />
           </td>
         </tr>
-
-        <!-- Content -->
         <tr>
           <td style="padding: 28px 24px;">
-            <div style="background-color: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 8px 14px; display: inline-block; margin-bottom: 16px;">
-              <span style="color: #818cf8; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Prueba de Conexión</span>
+            <div style="background-color: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 6px 12px; display: inline-block; margin-bottom: 16px;">
+              <span style="color: #818cf8; font-size: 11px; font-weight: bold; text-transform: uppercase;">⚡ Correo de Depuración</span>
             </div>
 
-            <h1 style="color: #ffffff; font-size: 22px; font-weight: 800; margin: 0 0 10px 0; line-height: 1.3;">
-              ¡Tu servidor de Scoreboard está conectado! 🏁
+            <h1 style="color: #ffffff; font-size: 20px; font-weight: 800; margin: 0 0 10px 0;">
+              ¡Conexión SMTP exitosa! 🚀
             </h1>
-            <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
-              Este es un correo de prueba enviado desde tu complemento de <strong>Home Assistant</strong>. Tu configuración SMTP ha sido verificada con éxito.
+            <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 20px 0;">
+              Este es un correo de prueba de depuración enviado exclusivamente a <strong>{target}</strong> desde tu complemento de Home Assistant.
             </p>
 
-            <!-- Recipients Box -->
-            <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 16px; margin-bottom: 24px;">
-              <h3 style="color: #e2e8f0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px 0;">
-                👥 Jugadores Registrados para Recibir Reportes ({len(players_with_email)})
-              </h3>
-              <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                {players_list_html}
-              </table>
+            <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; margin-bottom: 20px;">
+              <div style="color: #cbd5e1; font-size: 12px; line-height: 1.6;">
+                ✔ Servidor SMTP conectado correctamente.<br>
+                ✔ Autenticación TLS verificada.<br>
+                ✔ Fecha y hora de prueba: <strong>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</strong>
+              </div>
             </div>
 
-            <!-- Feature highlight -->
-            <div style="background-color: rgba(245, 158, 11, 0.08); border-left: 4px solid #f59e0b; border-radius: 0 12px 12px 0; padding: 14px 16px; margin-bottom: 24px;">
-              <h4 style="color: #fbbf24; font-size: 13px; margin: 0 0 4px 0; font-weight: 700;">
-                🏆 ¿Qué pasará ahora al terminar una partida?
-              </h4>
-              <p style="color: #cbd5e1; font-size: 12px; line-height: 1.5; margin: 0;">
-                Cada vez que pulses <strong>"Finalizar Sesión"</strong> en tu Scoreboard, todos los jugadores que hayan participado recibirán automáticamente su reporte con el podio (🥇🥈🥉), puntuaciones y desglose de carreras.
-              </p>
-            </div>
-
-            <!-- Footer -->
-            <p style="color: #64748b; font-size: 11px; text-align: center; margin: 24px 0 0 0; border-top: 1px solid #1e293b; padding-top: 16px;">
-              Enviado automáticamente por <strong>Game Scoreboard</strong> · Home Assistant Native Add-on<br>
-              Host: {smtp_host} · Remitente: {sender_email}
+            <p style="color: #64748b; font-size: 11px; text-align: center; margin: 20px 0 0 0; border-top: 1px solid #1e293b; padding-top: 14px;">
+              Game Scoreboard · Home Assistant Native Add-on
             </p>
           </td>
         </tr>
@@ -188,120 +243,394 @@ def send_test_email(override_config: Optional[Dict[str, Any]] = None) -> Dict[st
     </html>
     """
 
-    plain_content = f"""
-    ¡Tu servidor de Game Scoreboard está conectado!
-    ================================================
-    Este es un correo de prueba de tu Home Assistant Add-on.
+    plain_content = f"Prueba de Conexión Exitosa con Game Scoreboard.\nEnviado a {target} a las {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}."
 
-    Jugadores que recibirán reportes ({len(players_with_email)}):
-    """ + "\n".join([f"- {p['name']} (@{p.get('nickname') or ''}): {p['email']}" for p in players_with_email])
-
-    # 3. Create MIME Message
-    msg_root = MIMEMultipart("related")
-    msg_root["Subject"] = "🎮 Game Scoreboard: Prueba de Conexión Exitosa 🏁"
-    msg_root["From"] = f"{sender_name} <{sender_email}>"
-    msg_root["To"] = ", ".join(recipients)
-
-    msg_alternative = MIMEMultipart("alternative")
-    msg_root.attach(msg_alternative)
-
-    msg_alternative.attach(MIMEText(plain_content, "plain", "utf-8"))
-    msg_alternative.attach(MIMEText(html_content, "html", "utf-8"))
-
-    # Attach inline banner
-    if BANNER_IMAGE_PATH.exists():
-        with open(BANNER_IMAGE_PATH, "rb") as img_f:
-            img_part = MIMEImage(img_f.read(), _subtype="jpeg")
-            img_part.add_header("Content-ID", "<tournament_banner>")
-            img_part.add_header("Content-Disposition", "inline", filename="banner.jpg")
-            msg_root.attach(img_part)
-
-    # 4. Connect to SMTP server & send
-    server = smtplib.SMTP(smtp_host, smtp_port, timeout=12)
-    if use_tls:
-        server.starttls()
-    server.login(sender_email, smtp_password)
-    server.sendmail(sender_email, recipients, msg_root.as_string())
-    server.quit()
+    send_mime_message(
+        recipients=[target],
+        subject=subject,
+        html_body=html_content,
+        plain_body=plain_content,
+        trigger_type="test",
+        override_config=override_config
+    )
 
     return {
         "status": "ok",
-        "message": f"¡Correo de prueba enviado con éxito a {len(recipients)} jugador(es)!",
-        "recipients": recipients
+        "message": f"¡Correo de prueba enviado con éxito a {target}!",
+        "recipient": target
     }
 
 
-def send_session_report_email(session_id: int) -> Dict[str, Any]:
+# -----------------------------------------------------------------------------
+# TEMPLATES MANAGEMENT
+# -----------------------------------------------------------------------------
+def list_email_templates() -> List[Dict[str, Any]]:
+    """List all email templates."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT id, name, subject_template, banner_url, intro_text,
+           include_podium, include_standings, include_matches, include_metrics, footer_text, created_at
+    FROM email_templates
+    ORDER BY name ASC
+    """)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_email_template(template_id: str) -> Optional[Dict[str, Any]]:
+    """Get single email template by id."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM email_templates WHERE id = ?", (template_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_email_template(template_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Update an existing email template."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM email_templates WHERE id = ?", (template_id,))
+    if not cursor.fetchone():
+        conn.close()
+        raise ValueError(f"Plantilla '{template_id}' no encontrada.")
+
+    cursor.execute("""
+    UPDATE email_templates SET
+        name = ?,
+        subject_template = ?,
+        banner_url = ?,
+        intro_text = ?,
+        include_podium = ?,
+        include_standings = ?,
+        include_matches = ?,
+        include_metrics = ?,
+        footer_text = ?
+    WHERE id = ?
+    """, (
+        data.get("name"),
+        data.get("subject_template"),
+        data.get("banner_url", "static/img/email_banner.jpg"),
+        data.get("intro_text", ""),
+        1 if data.get("include_podium", True) else 0,
+        1 if data.get("include_standings", True) else 0,
+        1 if data.get("include_matches", True) else 0,
+        1 if data.get("include_metrics", True) else 0,
+        data.get("footer_text", ""),
+        template_id
+    ))
+    conn.commit()
+    conn.close()
+    return get_email_template(template_id)
+
+
+# -----------------------------------------------------------------------------
+# AUTOMATIONS MANAGEMENT (CRUD)
+# -----------------------------------------------------------------------------
+def list_automations() -> List[Dict[str, Any]]:
+    """List all automations."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT a.*, t.name AS template_name
+    FROM automations a
+    LEFT JOIN email_templates t ON a.template_id = t.id
+    ORDER BY a.id ASC
+    """)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_automation(automation_id: int) -> Optional[Dict[str, Any]]:
+    """Get single automation."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT a.*, t.name AS template_name
+    FROM automations a
+    LEFT JOIN email_templates t ON a.template_id = t.id
+    WHERE a.id = ?
+    """, (automation_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def create_automation(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new automation."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO automations (
+        name, trigger_type, content_type, template_id, target_recipients, custom_emails, is_active
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        data.get("name", "Nueva Automatización"),
+        data.get("trigger_type", "session_finished"),
+        data.get("content_type", "session_summary"),
+        data.get("template_id", "session_mario_kart"),
+        data.get("target_recipients", "session_participants"),
+        data.get("custom_emails", ""),
+        1 if data.get("is_active", True) else 0
+    ))
+    new_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return get_automation(new_id)
+
+
+def update_automation(automation_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Update an automation."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM automations WHERE id = ?", (automation_id,))
+    if not cursor.fetchone():
+        conn.close()
+        raise ValueError("Automatización no encontrada")
+
+    cursor.execute("""
+    UPDATE automations SET
+        name = ?,
+        trigger_type = ?,
+        content_type = ?,
+        template_id = ?,
+        target_recipients = ?,
+        custom_emails = ?,
+        is_active = ?
+    WHERE id = ?
+    """, (
+        data.get("name"),
+        data.get("trigger_type"),
+        data.get("content_type"),
+        data.get("template_id"),
+        data.get("target_recipients"),
+        data.get("custom_emails", ""),
+        1 if data.get("is_active", True) else 0,
+        automation_id
+    ))
+    conn.commit()
+    conn.close()
+    return get_automation(automation_id)
+
+
+def toggle_automation(automation_id: int) -> Dict[str, Any]:
+    """Toggle automation is_active status."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT is_active FROM automations WHERE id = ?", (automation_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("Automatización no encontrada")
+    new_status = 0 if row["is_active"] else 1
+    cursor.execute("UPDATE automations SET is_active = ? WHERE id = ?", (new_status, automation_id))
+    conn.commit()
+    conn.close()
+    return get_automation(automation_id)
+
+
+def duplicate_automation(automation_id: int) -> Dict[str, Any]:
+    """Duplicate/copy an existing automation."""
+    existing = get_automation(automation_id)
+    if not existing:
+        raise ValueError("Automatización no encontrada")
+    existing["name"] = f"{existing['name']} (Copia)"
+    return create_automation(existing)
+
+
+def delete_automation(automation_id: int):
+    """Delete an automation."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM automations WHERE id = ?", (automation_id,))
+    conn.commit()
+    conn.close()
+
+
+# -----------------------------------------------------------------------------
+# AUTOMATION EXECUTION ENGINE
+# -----------------------------------------------------------------------------
+def execute_automation(automation: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
-    Send complete tournament session report to all participating players with registered email.
+    Execute an automation, generating the appropriate template content and sending to target recipients.
     """
-    cfg = get_email_config()
-    if not cfg.get("is_enabled", True):
-        return {"status": "disabled", "message": "Email notifications are disabled."}
+    if not automation.get("is_active"):
+        return {"status": "inactive", "message": "Automation is deactivated"}
 
-    sender_email = (cfg.get("sender_email") or "").strip()
-    smtp_password = (cfg.get("smtp_password") or "").strip()
-    smtp_host = (cfg.get("smtp_host") or "smtp.gmail.com").strip()
-    smtp_port = int(cfg.get("smtp_port") or 587)
-    sender_name = cfg.get("sender_name") or "Game Scoreboard 🎮"
-    use_tls = cfg.get("use_tls", True)
+    template = get_email_template(automation.get("template_id", "session_mario_kart")) or {
+        "name": "Plantilla General",
+        "subject_template": "Reporte de Torneo: {{session_title}}",
+        "banner_url": "static/img/email_banner.jpg",
+        "intro_text": "Resultados oficiales:",
+        "include_podium": 1,
+        "include_standings": 1,
+        "include_matches": 1,
+        "include_metrics": 1,
+        "footer_text": "Game Scoreboard"
+    }
 
-    if not sender_email or not smtp_password:
-        return {"status": "error", "message": "SMTP not configured"}
+    content_type = automation.get("content_type", "session_summary")
+    target_recipients = automation.get("target_recipients", "session_participants")
 
-    # Fetch session details
+    # Determine recipients
+    recipients = []
+    if target_recipients == "session_participants":
+        if context and "session" in context:
+            recipients = [(p.get("email") or "").strip() for p in context["session"].get("players", []) if (p.get("email") or "").strip()]
+    elif target_recipients == "all_players":
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT email FROM players WHERE email IS NOT NULL AND TRIM(email) != ''")
+        recipients = [(r["email"] or "").strip() for r in cursor.fetchall() if (r["email"] or "").strip()]
+        conn.close()
+    elif target_recipients == "custom":
+        raw = automation.get("custom_emails") or ""
+        recipients = [e.strip() for e in raw.split(",") if "@" in e]
+
+    if not recipients:
+        return {"status": "skipped", "message": "No recipients found for automation"}
+
+    # Render Subject & Body based on content_type
+    subject = template.get("subject_template") or "Reporte de Game Scoreboard"
+    month_name = datetime.now().strftime("%B %Y")
+
+    if content_type == "session_summary" and context and "session" in context:
+        s = context["session"]
+        subject = subject.replace("{{session_title}}", s.get("title", "Sesión de Juego"))
+        subject = subject.replace("{{game_name}}", s.get("game_name", "Videojuego"))
+        subject = subject.replace("{{month}}", month_name)
+        html_body, plain_body = render_session_email(s, template)
+    elif content_type in ["global_leaderboard", "monthly_summary"]:
+        subject = subject.replace("{{session_title}}", "Resumen General")
+        subject = subject.replace("{{game_name}}", "Todos los juegos")
+        subject = subject.replace("{{month}}", month_name)
+        html_body, plain_body = render_global_digest_email(template, content_type)
+    else:
+        subject = subject.replace("{{session_title}}", "Notificación")
+        subject = subject.replace("{{month}}", month_name)
+        html_body = f"<p>{template.get('intro_text', 'Notificación de Game Scoreboard')}</p>"
+        plain_body = template.get('intro_text', 'Notificación de Game Scoreboard')
+
+    # Banner path
+    banner_file = BASE_DIR / template.get("banner_url", "static/img/email_banner.jpg")
+
+    result = send_mime_message(
+        recipients=recipients,
+        subject=subject,
+        html_body=html_body,
+        plain_body=plain_body,
+        trigger_type=automation.get("trigger_type", "automation"),
+        banner_file=banner_file
+    )
+
+    # Update last_triggered_at
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE automations SET last_triggered_at = CURRENT_TIMESTAMP WHERE id = ?", (automation["id"],))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[EmailService] Error updating last_triggered_at: {e}")
+
+    return result
+
+
+def trigger_session_finished_automations(session_id: int):
+    """
+    Trigger all active automations configured for 'session_finished'.
+    """
     from routers.sessions import get_session
     try:
         session = get_session(session_id)
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        print(f"[EmailService] Could not load session {session_id}: {e}")
+        return
 
-    # Filter players with email
-    participating_with_email = [p for p in session["players"] if (p.get("email") or "").strip()]
-    if not participating_with_email:
-        return {"status": "skipped", "message": "No participating players have an email"}
+    automations = list_automations()
+    session_finished_autos = [a for a in automations if a.get("trigger_type") == "session_finished" and a.get("is_active")]
 
-    recipients = [(p.get("email") or "").strip() for p in participating_with_email]
+    for auto in session_finished_autos:
+        try:
+            execute_automation(auto, context={"session": session})
+        except Exception as e:
+            print(f"[EmailService] Error executing automation '{auto.get('name')}': {e}")
 
-    # Build Standings Table HTML
+
+def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> tuple:
+    """Render HTML and plain text for session summary according to template flags."""
     standings_rows = ""
-    for idx, st in enumerate(session.get("standings", []), start=1):
-        medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}º"))
-        standings_rows += f"""
-        <tr style="border-bottom: 1px solid #1e293b;">
-          <td style="padding: 10px 12px; font-weight: bold; font-size: 14px; text-align: center; color: #fbbf24;">{medal}</td>
-          <td style="padding: 10px 12px;">
-            <strong style="color: #ffffff; font-size: 13px;">{st['name']}</strong>
-            <span style="color: #818cf8; font-size: 11px; margin-left: 4px;">@{st.get('nickname') or ''}</span>
-          </td>
-          <td style="padding: 10px 12px; text-align: center; color: #10b981; font-weight: bold;">{st['wins']}</td>
-          <td style="padding: 10px 12px; text-align: center; color: #94a3b8;">{st['matches_played']}</td>
-          <td style="padding: 10px 12px; text-align: right; color: #fbbf24; font-weight: 800; font-size: 15px;">{st['total_score']} pts</td>
-        </tr>
-        """
+    podium_html = ""
 
-    # Build Matches list HTML
-    matches_html = ""
-    for m in session.get("matches", []):
-        type_badge = "Práctica" if m.get("is_practice") else "Oficial"
-        scores_line = ", ".join([f"<strong>{sc['player_nickname'] or sc['player_name']}</strong> ({sc['rank_position']}º · {sc['score']} pts)" for sc in m.get("scores", [])])
-        rules_line = " · ".join([f"{k}: {v}" for k, v in m.get("rule_values", {}).items()])
-        matches_html += f"""
-        <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-            <span style="color: #818cf8; font-weight: bold; font-size: 12px;">Partida #{m['match_number']} ({m['match_type']}) [{type_badge}]</span>
-          </div>
-          {f'<div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px;">{rules_line}</div>' if rules_line else ''}
-          <div style="color: #e2e8f0; font-size: 12px;">{scores_line}</div>
+    standings = session.get("standings", [])
+    if template.get("include_podium") and len(standings) > 0:
+        first = standings[0] if len(standings) > 0 else None
+        second = standings[1] if len(standings) > 1 else None
+        third = standings[2] if len(standings) > 2 else None
+
+        podium_html = f"""
+        <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 16px; margin-bottom: 20px; text-align: center;">
+          <h4 style="color: #fbbf24; font-size: 13px; text-transform: uppercase; margin: 0 0 12px 0;">👑 Podio de Honor 👑</h4>
+          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td style="width: 33%; text-align: center; vertical-align: bottom; padding: 8px;">
+                {f'<div style="font-size: 20px;">🥈</div><strong style="color: #cbd5e1; font-size: 13px; display: block;">{second["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{second["total_score"]} pts</span>' if second else ''}
+              </td>
+              <td style="width: 34%; text-align: center; vertical-align: bottom; padding: 8px; border-left: 1px solid #1e293b; border-right: 1px solid #1e293b;">
+                {f'<div style="font-size: 28px;">🥇</div><strong style="color: #fbbf24; font-size: 15px; display: block;">{first["name"]}</strong><span style="color: #fde68a; font-size: 12px; font-weight: bold;">{first["total_score"]} pts ({first["wins"]} vic.)</span>' if first else ''}
+              </td>
+              <td style="width: 33%; text-align: center; vertical-align: bottom; padding: 8px;">
+                {f'<div style="font-size: 20px;">🥉</div><strong style="color: #d97706; font-size: 13px; display: block;">{third["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{third["total_score"]} pts</span>' if third else ''}
+              </td>
+            </tr>
+          </table>
         </div>
         """
 
-    html_content = f"""
+    if template.get("include_standings"):
+        for idx, st in enumerate(standings, start=1):
+            medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}º"))
+            standings_rows += f"""
+            <tr style="border-bottom: 1px solid #1e293b;">
+              <td style="padding: 10px 12px; font-weight: bold; font-size: 14px; text-align: center; color: #fbbf24;">{medal}</td>
+              <td style="padding: 10px 12px;">
+                <strong style="color: #ffffff; font-size: 13px;">{st['name']}</strong>
+                <span style="color: #818cf8; font-size: 11px; margin-left: 4px;">@{st.get('nickname') or ''}</span>
+              </td>
+              <td style="padding: 10px 12px; text-align: center; color: #10b981; font-weight: bold;">{st['wins']}</td>
+              <td style="padding: 10px 12px; text-align: center; color: #94a3b8;">{st['matches_played']}</td>
+              <td style="padding: 10px 12px; text-align: right; color: #fbbf24; font-weight: 800; font-size: 15px;">{st['total_score']} pts</td>
+            </tr>
+            """
+
+    matches_html = ""
+    if template.get("include_matches"):
+        for m in session.get("matches", []):
+            type_badge = "Práctica" if m.get("is_practice") else "Oficial"
+            scores_parts = []
+            for sc in m.get("scores", []):
+                char_str = f" · {sc['metrics'].get('character')}" if (template.get("include_metrics") and sc.get("metrics") and sc["metrics"].get("character")) else ""
+                scores_parts.append(f"<strong>{sc['player_nickname'] or sc['player_name']}</strong> ({sc['rank_position']}º - {sc['score']} pts{char_str})")
+            scores_line = ", ".join(scores_parts)
+            rules_line = " · ".join([f"{k}: {v}" for k, v in m.get("rule_values", {}).items()])
+            matches_html += f"""
+            <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;">
+              <div style="color: #818cf8; font-weight: bold; font-size: 12px; margin-bottom: 4px;">Partida #{m['match_number']} ({m['match_type']}) [{type_badge}]</div>
+              {f'<div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px;">{rules_line}</div>' if rules_line else ''}
+              <div style="color: #e2e8f0; font-size: 12px;">{scores_line}</div>
+            </div>
+            """
+
+    html = f"""
     <!DOCTYPE html>
     <html lang="es">
     <head>
       <meta charset="UTF-8">
-      <title>Resultados de Sesión - {session['title']}</title>
+      <title>{session['title']}</title>
     </head>
     <body style="margin: 0; padding: 20px; background-color: #020617; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc;">
       <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
@@ -311,28 +640,28 @@ def send_session_report_email(session_id: int) -> Dict[str, Any]:
           </td>
         </tr>
         <tr>
-          <td style="padding: 28px 24px;">
+          <td style="padding: 24px;">
             <div style="color: #818cf8; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">
               {session.get('game_icon', '🎮')} {session.get('game_name', 'Videojuego')}
             </div>
-            <h1 style="color: #ffffff; font-size: 22px; font-weight: 800; margin: 0 0 8px 0;">
+            <h1 style="color: #ffffff; font-size: 22px; font-weight: 800; margin: 0 0 6px 0;">
               {session['title']}
             </h1>
-            <p style="color: #94a3b8; font-size: 12px; margin: 0 0 20px 0;">
-              Sesión completada el {session.get('ended_at', session.get('started_at'))} · {len(session.get('matches', []))} partidas
+            <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin: 0 0 18px 0;">
+              {template.get('intro_text', 'Resultados oficiales de la sesión:')}
             </p>
 
-            <!-- Leaderboard Standings Table -->
-            <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; margin-bottom: 24px;">
-              <h3 style="color: #e2e8f0; font-size: 13px; text-transform: uppercase; margin: 0 0 10px 0;">
-                📊 Tabla de Posiciones Final
-              </h3>
+            {podium_html}
+
+            {f'''
+            <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; margin-bottom: 20px;">
+              <h3 style="color: #e2e8f0; font-size: 12px; text-transform: uppercase; margin: 0 0 10px 0;">📊 Tabla de Puntuaciones</h3>
               <table border="0" cellpadding="0" cellspacing="0" width="100%">
                 <thead>
                   <tr style="border-bottom: 1px solid #1e293b; color: #64748b; font-size: 11px; text-transform: uppercase;">
                     <th style="padding: 6px 12px; text-align: center; width: 40px;">Pos</th>
                     <th style="padding: 6px 12px; text-align: left;">Jugador</th>
-                    <th style="padding: 6px 12px; text-align: center;">Victorias</th>
+                    <th style="padding: 6px 12px; text-align: center;">Vic</th>
                     <th style="padding: 6px 12px; text-align: center;">Partidas</th>
                     <th style="padding: 6px 12px; text-align: right;">Puntos</th>
                   </tr>
@@ -342,16 +671,15 @@ def send_session_report_email(session_id: int) -> Dict[str, Any]:
                 </tbody>
               </table>
             </div>
+            ''' if template.get("include_standings") else ''}
 
-            <!-- Matches History -->
-            <h3 style="color: #e2e8f0; font-size: 13px; text-transform: uppercase; margin: 0 0 10px 0;">
-              📜 Detalle de Partidas
-            </h3>
+            {f'''
+            <h3 style="color: #e2e8f0; font-size: 12px; text-transform: uppercase; margin: 0 0 10px 0;">📜 Historial de Partidas</h3>
             {matches_html}
+            ''' if template.get("include_matches") and matches_html else ''}
 
-            <!-- Footer -->
-            <p style="color: #64748b; font-size: 11px; text-align: center; margin: 24px 0 0 0; border-top: 1px solid #1e293b; padding-top: 16px;">
-              Enviado automáticamente por <strong>Game Scoreboard</strong> · Home Assistant Native Add-on
+            <p style="color: #64748b; font-size: 11px; text-align: center; margin: 24px 0 0 0; border-top: 1px solid #1e293b; padding-top: 14px;">
+              {template.get('footer_text', 'Game Scoreboard · Home Assistant Add-on')}
             </p>
           </td>
         </tr>
@@ -360,27 +688,76 @@ def send_session_report_email(session_id: int) -> Dict[str, Any]:
     </html>
     """
 
-    msg_root = MIMEMultipart("related")
-    msg_root["Subject"] = f"🏆 Resultados: {session['title']} ({session.get('game_name', 'Torneo')}) 🏁"
-    msg_root["From"] = f"{sender_name} <{sender_email}>"
-    msg_root["To"] = ", ".join(recipients)
+    plain = f"Resultados de Sesión: {session['title']}\n" + "\n".join([f"{st['name']}: {st['total_score']} pts ({st['wins']} vic)" for st in standings])
+    return html, plain
 
-    msg_alternative = MIMEMultipart("alternative")
-    msg_root.attach(msg_alternative)
-    msg_alternative.attach(MIMEText(html_content, "html", "utf-8"))
 
-    if BANNER_IMAGE_PATH.exists():
-        with open(BANNER_IMAGE_PATH, "rb") as img_f:
-            img_part = MIMEImage(img_f.read(), _subtype="jpeg")
-            img_part.add_header("Content-ID", "<tournament_banner>")
-            img_part.add_header("Content-Disposition", "inline", filename="banner.jpg")
-            msg_root.attach(img_part)
+def render_global_digest_email(template: Dict[str, Any], content_type: str) -> tuple:
+    """Render global leaderboard or monthly digest."""
+    from routers.stats import get_leaderboard
+    lb = get_leaderboard(include_practice=False)
 
-    server = smtplib.SMTP(smtp_host, smtp_port, timeout=12)
-    if use_tls:
-        server.starttls()
-    server.login(sender_email, smtp_password)
-    server.sendmail(sender_email, recipients, msg_root.as_string())
-    server.quit()
+    rows_html = ""
+    for idx, p in enumerate(lb, start=1):
+        medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}º"))
+        rows_html += f"""
+        <tr style="border-bottom: 1px solid #1e293b;">
+          <td style="padding: 8px 12px; text-align: center; font-weight: bold; color: #fbbf24;">{medal}</td>
+          <td style="padding: 8px 12px; color: #ffffff; font-size: 13px;"><strong>{p['name']}</strong> (@{p.get('nickname') or ''})</td>
+          <td style="padding: 8px 12px; text-align: center; color: #10b981; font-weight: bold;">{p['wins']}</td>
+          <td style="padding: 8px 12px; text-align: center; color: #94a3b8;">{p['matches_played']}</td>
+          <td style="padding: 8px 12px; text-align: center; color: #f59e0b;">{p['win_rate']}%</td>
+          <td style="padding: 8px 12px; text-align: right; color: #fbbf24; font-weight: bold;">{p['total_score']} pts</td>
+        </tr>
+        """
 
-    return {"status": "ok", "recipients": recipients}
+    title = "Resumen Mensual de Campeonatos" if content_type == "monthly_summary" else "Leaderboard Global"
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <title>{title}</title>
+    </head>
+    <body style="margin: 0; padding: 20px; background-color: #020617; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc;">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        <tr>
+          <td style="padding: 0; text-align: center; background-color: #090d16;">
+            <img src="cid:tournament_banner" alt="Game Scoreboard" style="width: 100%; max-width: 600px; height: auto; display: block;" />
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 24px;">
+            <h1 style="color: #ffffff; font-size: 22px; font-weight: 800; margin: 0 0 8px 0;">{title}</h1>
+            <p style="color: #94a3b8; font-size: 13px; margin: 0 0 18px 0;">{template.get('intro_text', 'Estado del campeonato global:')}</p>
+
+            <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; margin-bottom: 20px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <thead>
+                  <tr style="border-bottom: 1px solid #1e293b; color: #64748b; font-size: 11px; text-transform: uppercase;">
+                    <th style="padding: 6px 12px; text-align: center;">Pos</th>
+                    <th style="padding: 6px 12px; text-align: left;">Jugador</th>
+                    <th style="padding: 6px 12px; text-align: center;">Vic</th>
+                    <th style="padding: 6px 12px; text-align: center;">Partidas</th>
+                    <th style="padding: 6px 12px; text-align: center;">Win%</th>
+                    <th style="padding: 6px 12px; text-align: right;">Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows_html}
+                </tbody>
+              </table>
+            </div>
+
+            <p style="color: #64748b; font-size: 11px; text-align: center; margin: 24px 0 0 0; border-top: 1px solid #1e293b; padding-top: 14px;">
+              {template.get('footer_text', 'Game Scoreboard · Home Assistant Add-on')}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    plain = f"{title}\n" + "\n".join([f"{p['name']}: {p['wins']} vic, {p['total_score']} pts" for p in lb])
+    return html, plain

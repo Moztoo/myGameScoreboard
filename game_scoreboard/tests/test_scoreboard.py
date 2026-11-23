@@ -323,20 +323,66 @@ def test_email_settings_and_test_trigger():
         mock_instance = MagicMock()
         mock_smtp_class.return_value = mock_instance
 
-        test_res = client.post("/api/settings/email/test")
+        # Test sending debug email to a specific target email
+        test_res = client.post("/api/settings/email/test", json={
+            "target_email": "custom_debug@gmail.com"
+        })
         assert test_res.status_code == 200
         data = test_res.json()
         assert data["status"] == "ok"
-        assert "friend@gmail.com" in data["recipients"]
+        assert data["recipient"] == "custom_debug@gmail.com"
 
         # Verify SMTP interactions
         mock_instance.starttls.assert_called_once()
         mock_instance.login.assert_called_once_with("server@gmail.com", "abcdefghijklmnop")
         mock_instance.sendmail.assert_called_once()
-        # Test with explicit None password (user already saved password and left field blank)
-        test_res2 = client.post("/api/settings/email/test", json={
-            "sender_email": "server@gmail.com",
-            "smtp_password": None
-        })
-        assert test_res2.status_code == 200
-        assert test_res2.json()["status"] == "ok"
+
+        # Check logs
+        logs_res = client.get("/api/settings/email/logs")
+        assert logs_res.status_code == 200
+        logs = logs_res.json()
+        assert any(l["recipient"] == "custom_debug@gmail.com" and l["status"] == "sent" for l in logs)
+
+    # 5. Templates CRUD
+    templates_res = client.get("/api/settings/templates")
+    assert templates_res.status_code == 200
+    assert len(templates_res.json()) >= 1
+    t_id = templates_res.json()[0]["id"]
+
+    edit_t = client.put(f"/api/settings/templates/{t_id}", json={
+        "name": "Updated Template",
+        "subject_template": "New Subject {{session_title}}",
+        "banner_url": "static/img/email_banner.jpg",
+        "intro_text": "Custom intro",
+        "include_podium": True,
+        "include_standings": True,
+        "include_matches": True,
+        "include_metrics": True,
+        "footer_text": "Footer"
+    })
+    assert edit_t.status_code == 200
+    assert edit_t.json()["name"] == "Updated Template"
+
+    # 6. Automations CRUD (create, toggle, duplicate, delete)
+    auto_create = client.post("/api/settings/automations", json={
+        "name": "Auto Mensual",
+        "trigger_type": "monthly",
+        "content_type": "monthly_summary",
+        "template_id": t_id,
+        "target_recipients": "all_players",
+        "is_active": True
+    })
+    assert auto_create.status_code == 200
+    auto_id = auto_create.json()["id"]
+
+    # Toggle
+    toggled = client.post(f"/api/settings/automations/{auto_id}/toggle").json()
+    assert toggled["is_active"] == 0
+
+    # Duplicate
+    dupe = client.post(f"/api/settings/automations/{auto_id}/duplicate").json()
+    assert "Copia" in dupe["name"]
+
+    # Delete
+    del_res = client.delete(f"/api/settings/automations/{auto_id}")
+    assert del_res.status_code == 200

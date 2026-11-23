@@ -16,7 +16,7 @@
     }
   </script>
   <!-- Local Critical CSS First -->
-  <link rel="stylesheet" href="static/css/styles.css?v=1.0.8">
+  <link rel="stylesheet" href="static/css/styles.css?v=1.0.9">
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -58,7 +58,7 @@
           <div>
             <div class="flex items-center gap-1.5">
               <span class="text-sm sm:text-base font-black tracking-tight text-white">Game Scoreboard</span>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.0.8</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.0.9</span>
             </div>
             <p class="text-[10px] sm:text-xs text-slate-400">Torneos y Partidas entre Amigos</p>
           </div>
@@ -83,8 +83,11 @@
         <button id="nav-games" onclick="switchTab('games')" class="nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
           <span>⚙️</span> Juegos
         </button>
+        <button id="nav-email" onclick="switchTab('email')" class="nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
+          <span>✉️</span> Correo
+        </button>
         <button id="nav-backup" onclick="switchTab('backup')" class="nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
-          <span>✉️</span> Correo & Respaldo
+          <span>💾</span> Respaldo
         </button>
       </nav>
     </div>
@@ -384,18 +387,18 @@
 
 
     <!-- ===================================================================== -->
-    <!-- TAB: BACKUP & EMAIL SETTINGS                                          -->
+    <!-- TAB: EMAIL & AUTOMATIONS                                              -->
     <!-- ===================================================================== -->
-    <section id="tab-backup" class="hidden space-y-4 sm:space-y-6 max-w-2xl mx-auto">
+    <section id="tab-email" class="hidden space-y-6 max-w-5xl mx-auto">
 
-      <!-- Email Settings Card -->
+      <!-- 1. SMTP Settings & Debug Testing -->
       <div class="bg-slate-900/80 rounded-2xl border border-indigo-500/30 p-4 sm:p-6 space-y-5 shadow-xl">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3">
           <div class="flex items-center gap-2.5">
-            <span class="text-2xl">✉️</span>
+            <span class="text-2xl">⚙️</span>
             <div>
-              <h2 class="text-base sm:text-lg font-bold text-white">Notificaciones por Correo (Gmail SMTP)</h2>
-              <p class="text-xs text-slate-400">Envía el podio y las estadísticas a tus amigos al terminar cada sesión de juego.</p>
+              <h2 class="text-base sm:text-lg font-bold text-white">Configuración de Servidor de Correo (SMTP)</h2>
+              <p class="text-xs text-slate-400">Credenciales de tu cuenta para el envío de notificaciones automáticas y reportes.</p>
             </div>
           </div>
           <div id="email-configured-badge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -431,21 +434,161 @@
             </div>
           </div>
 
-          <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-800/80">
+          <div class="flex justify-end pt-1">
             <button type="submit" id="btn-save-email-settings" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-1.5">
-              <span>💾</span> Guardar Configuración
+              <span>💾</span> Guardar Configuración SMTP
             </button>
-            <button type="button" onclick="handleSendTestEmail()" id="btn-test-email" class="px-4 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold text-xs sm:text-sm transition flex items-center justify-center gap-1.5">
-              <span>🚀</span> Enviar Correo de Prueba a Jugadores
+          </div>
+        </form>
+
+        <!-- Debug Section -->
+        <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">🧪</span>
+            <h3 class="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">Depuración de Correo (Prueba Manual)</h3>
+          </div>
+          <p class="text-xs text-slate-400">
+            Ingresa un correo manualmente para enviar un mensaje de prueba inmediato exclusivamente a esa dirección y verificar la entrega.
+          </p>
+
+          <div class="flex flex-col sm:flex-row gap-2.5">
+            <input type="email" id="debug-target-email" placeholder="ej. tu_correo_personal@gmail.com" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+            <button type="button" onclick="handleSendDebugEmail()" id="btn-debug-email" class="px-5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold text-xs sm:text-sm transition flex items-center justify-center gap-2 flex-shrink-0">
+              <span>🚀</span> Enviar Correo de Prueba (Depuración)
             </button>
           </div>
 
-          <div id="email-test-result-box" class="hidden p-3 rounded-xl text-xs space-y-1"></div>
-        </form>
+          <div id="email-debug-result-box" class="hidden p-3 rounded-xl text-xs space-y-1"></div>
+        </div>
       </div>
 
-      <!-- Export / Import Card -->
+      <!-- 2. Automations Management -->
+      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-6 space-y-4 shadow-xl">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">⚡</span>
+            <div>
+              <h2 class="text-base sm:text-lg font-bold text-white">Automatizaciones de Envío</h2>
+              <p class="text-xs text-slate-400">Define cuándo y a quiénes enviar reportes automáticos (por evento o periódicos).</p>
+            </div>
+          </div>
+          <button onclick="openCreateAutomationModal()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition flex items-center gap-1.5 self-start sm:self-auto">
+            <span>+</span> Nueva Automatización
+          </button>
+        </div>
+
+        <div id="automations-list" class="space-y-3">
+          <div class="text-center py-6 text-slate-500 text-xs">Cargando automatizaciones...</div>
+        </div>
+      </div>
+
+      <!-- 3. Templates Management -->
+      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-6 space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">🎨</span>
+            <div>
+              <h2 class="text-base sm:text-lg font-bold text-white">Plantillas de Correo</h2>
+              <p class="text-xs text-slate-400">Personaliza el banner, asunto, podio y qué información incluir en cada correo.</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="templates-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+          <div class="text-center py-6 text-slate-500 text-xs col-span-2">Cargando plantillas...</div>
+        </div>
+      </div>
+
+      <!-- 4. Email Audit Logs -->
+      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-6 space-y-4 shadow-xl">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">📜</span>
+            <div>
+              <h2 class="text-base sm:text-lg font-bold text-white">Registro de Envíos (Logs)</h2>
+              <p class="text-xs text-slate-400">Historial reciente de correos enviados, destinatarios y estados de entrega.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="loadEmailLogs()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition flex items-center gap-1">
+              <span>🔄</span> Actualizar
+            </button>
+            <button onclick="handleClearEmailLogs()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/50 hover:text-rose-300 text-slate-400 text-xs font-semibold transition flex items-center gap-1">
+              <span>🗑️</span> Limpiar Logs
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300 min-w-[500px]">
+            <thead class="bg-slate-950/60 uppercase tracking-wider text-slate-400 border-b border-slate-800 text-[10px]">
+              <tr>
+                <th class="py-2.5 px-3">Fecha</th>
+                <th class="py-2.5 px-3">Destinatario</th>
+                <th class="py-2.5 px-3">Asunto</th>
+                <th class="py-2.5 px-3">Disparador</th>
+                <th class="py-2.5 px-3 text-right">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="email-logs-table-body" class="divide-y divide-slate-800/60 font-mono text-[11px]">
+              <tr><td colspan="5" class="text-center py-6 text-slate-500">Cargando registros...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ===================================================================== -->
+    <!-- TAB: BACKUP & EXPORT/IMPORT                                           -->
+    <!-- ===================================================================== -->
+    <section id="tab-backup" class="hidden space-y-4 sm:space-y-6 max-w-2xl mx-auto">
       <div class="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-6 space-y-5">
+        <div>
+          <h2 class="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+            <span>💾</span> Exportar y Respaldar Información
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Descarga un respaldo comprimido `.ZIP` con toda la base de datos (sesiones, partidas, jugadores, puntos) y las fotos de los avatares para moverlo a otra instancia de Home Assistant o respaldarlo en tu PC.
+          </p>
+        </div>
+
+        <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div class="font-bold text-white text-xs sm:text-sm">Exportar Respaldo Completo</div>
+            <div class="text-[11px] text-slate-400">Descarga base de datos SQLite y fotos en ZIP.</div>
+          </div>
+          <button onclick="downloadBackup()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2">
+            <span>⬇️</span> Descargar ZIP
+          </button>
+        </div>
+
+        <hr class="border-slate-800">
+
+        <div>
+          <h3 class="text-xs sm:text-sm font-bold text-white mb-1.5">Restaurar Respaldo en Esta Instancia</h3>
+          <p class="text-[11px] text-slate-400 mb-3">
+            Sube un archivo `.ZIP` exportado previamente. <span class="text-amber-400 font-medium">Nota:</span> Esto reemplazará los datos actuales con los del respaldo.
+          </p>
+
+          <form id="import-form" onsubmit="handleImportBackup(event)" class="space-y-3">
+            <div class="flex items-center justify-center w-full">
+              <label for="import-file" class="flex flex-col items-center justify-center w-full h-28 border-2 border-slate-700 border-dashed rounded-xl cursor-pointer bg-slate-950/40 hover:bg-slate-950/70 transition">
+                <div class="flex flex-col items-center justify-center p-3 text-center">
+                  <span class="text-2xl mb-1">📦</span>
+                  <p class="text-xs text-slate-300 font-medium"><span class="font-semibold text-indigo-400">Toca para seleccionar</span> el archivo ZIP</p>
+                  <p class="text-[10px] text-slate-500 mt-0.5" id="import-file-name">scoreboard_backup_*.zip</p>
+                </div>
+                <input id="import-file" type="file" accept=".zip" class="hidden" onchange="updateImportFileName(this)">
+              </label>
+            </div>
+            <button type="submit" id="btn-import-submit" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/20 transition disabled:opacity-50">
+              Restaurar Respaldo Ahora
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
         <div>
           <h2 class="text-lg sm:text-xl font-black text-white flex items-center gap-2">
             <span>💾</span> Exportar y Respaldar Información
@@ -650,7 +793,160 @@
     </div>
   </div>
 
+  <!-- Modal: Automation Create/Edit -->
+  <div id="modal-automation" style="display: none;" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl space-y-4 my-8">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">⚡</span>
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-white" id="modal-automation-title">Nueva Automatización</h3>
+            <p class="text-xs text-slate-400">Configura cuándo y a quiénes enviar correos automáticos.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-automation')" class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 text-sm">✕</button>
+      </div>
+
+      <form id="form-automation" onsubmit="handleSaveAutomation(event)" class="space-y-4">
+        <input type="hidden" id="automation-id">
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Nombre de la Automatización *</label>
+          <input type="text" id="automation-name" placeholder="ej. Reporte de Torneo Mario Kart" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Disparador (Evento / Frecuencia) *</label>
+            <select id="automation-trigger" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <option value="session_finished">🏁 Al Finalizar Sesión</option>
+              <option value="monthly">📅 Mensual (1º de cada mes)</option>
+              <option value="weekly">📆 Semanal</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Tipo de Contenido *</label>
+            <select id="automation-content" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <option value="session_summary">🏆 Resumen de la Sesión</option>
+              <option value="global_leaderboard">🏅 Leaderboard Global</option>
+              <option value="monthly_summary">📊 Resumen Mensual de Campeonatos</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Plantilla de Correo a Usar *</label>
+          <select id="automation-template" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Destinatarios *</label>
+          <select id="automation-recipients" onchange="toggleCustomEmailsField()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="session_participants">👥 Solo Participantes de la Sesión</option>
+            <option value="all_players">🌐 Todos los Jugadores con Correo Registrado</option>
+            <option value="custom">✉️ Lista Específica de Correos</option>
+          </select>
+        </div>
+
+        <div id="automation-custom-emails-container" class="hidden">
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Correos Personalizados (Separados por coma)</label>
+          <input type="text" id="automation-custom-emails" placeholder="amigo1@gmail.com, amigo2@gmail.com" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="automation-is-active" checked class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+          <label for="automation-is-active" class="text-xs font-medium text-slate-300 cursor-pointer">Automatización Activa</label>
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2 border-t border-slate-800/80">
+          <button type="button" onclick="closeModal('modal-automation')" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-medium">Cancelar</button>
+          <button type="submit" id="btn-save-automation" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30">Guardar Automatización</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Email Template Edit -->
+  <div id="modal-template" style="display: none;" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl space-y-4 my-8">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">🎨</span>
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-white">Editar Plantilla de Correo</h3>
+            <p class="text-xs text-slate-400">Personaliza diseño, banner y datos a incluir.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-template')" class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 text-sm">✕</button>
+      </div>
+
+      <form id="form-template" onsubmit="handleSaveTemplate(event)" class="space-y-4">
+        <input type="hidden" id="edit-template-id">
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Nombre de la Plantilla *</label>
+          <input type="text" id="template-name" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Asunto del Correo (Subject) *</label>
+          <input type="text" id="template-subject" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <div class="text-[10px] text-indigo-400 mt-1 flex flex-wrap gap-1.5">
+            <span class="cursor-pointer hover:underline" onclick="insertVariableToSubject('{{session_title}}')">+ {{session_title}}</span>
+            <span class="cursor-pointer hover:underline" onclick="insertVariableToSubject('{{game_name}}')">+ {{game_name}}</span>
+            <span class="cursor-pointer hover:underline" onclick="insertVariableToSubject('{{month}}')">+ {{month}}</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Ruta o URL del Banner</label>
+          <input type="text" id="template-banner-url" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <span class="text-[10px] text-slate-500 mt-0.5 block">Por defecto: static/img/email_banner.jpg</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Texto de Introducción</label>
+          <textarea id="template-intro" rows="2" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+        </div>
+
+        <!-- Section Toggles -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+          <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Secciones a Incluir en el Correo</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <label class="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-slate-800/40">
+              <input type="checkbox" id="template-include-podium" class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+              <span class="text-white">👑 Podio de Honor (1º, 2º, 3º)</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-slate-800/40">
+              <input type="checkbox" id="template-include-standings" class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+              <span class="text-white">📊 Tabla de Puntos</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-slate-800/40">
+              <input type="checkbox" id="template-include-matches" class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+              <span class="text-white">📜 Detalle de Partidas</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-slate-800/40">
+              <input type="checkbox" id="template-include-metrics" class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+              <span class="text-white">🏎️ Personaje / Kart</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Pie de Página (Footer)</label>
+          <input type="text" id="template-footer" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2 border-t border-slate-800/80">
+          <button type="button" onclick="closeModal('modal-template')" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-medium">Cancelar</button>
+          <button type="submit" id="btn-save-template" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30">Guardar Plantilla</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- JavaScript Code: loaded with relative path supported by <base> -->
-  <script src="static/js/app.js?v=1.0.8"></script>
+  <script src="static/js/app.js?v=1.0.9"></script>
 </body>
 </html>

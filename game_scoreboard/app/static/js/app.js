@@ -49,7 +49,7 @@ function closeModal(id) {
 // Tab Switching
 function switchTab(tabId) {
   currentTab = tabId;
-  const tabs = ['dashboard', 'sessions', 'players', 'games', 'backup'];
+  const tabs = ['dashboard', 'sessions', 'players', 'games', 'email', 'backup'];
   tabs.forEach(t => {
     const section = document.getElementById(`tab-${t}`);
     const navBtn = document.getElementById(`nav-${t}`);
@@ -76,7 +76,7 @@ function switchTab(tabId) {
   if (tabId === 'sessions') loadSessionsTab();
   if (tabId === 'players') loadPlayers();
   if (tabId === 'games') loadGames();
-  if (tabId === 'backup') loadEmailSettings();
+  if (tabId === 'email') loadEmailTab();
 }
 
 // -----------------------------------------------------------------------------
@@ -1535,8 +1535,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // -----------------------------------------------------------------------------
-// EMAIL SETTINGS & TEST EMAIL
+// EMAIL & AUTOMATIONS SUBSYSTEM
 // -----------------------------------------------------------------------------
+let cachedTemplates = [];
+let cachedAutomations = [];
+
+async function loadEmailTab() {
+  await loadEmailSettings();
+  await loadAutomations();
+  await loadTemplates();
+  await loadEmailLogs();
+}
+
 async function loadEmailSettings() {
   try {
     const res = await fetch(getApiUrl('/api/settings/email'));
@@ -1558,7 +1568,7 @@ async function loadEmailSettings() {
 
     if (cfg.has_password) {
       if (passInp) passInp.placeholder = '•••••••• (Contraseña guardada)';
-      if (passHint) passHint.textContent = 'Contraseña de aplicación guardada. Déjalo en blanco si no deseas cambiarla.';
+      if (passHint) passHint.textContent = 'Contraseña de aplicación guardada. Déjalo en blanco para no cambiarla.';
       if (badge) badge.classList.remove('hidden');
     } else {
       if (badge) badge.classList.add('hidden');
@@ -1603,7 +1613,7 @@ async function handleSaveEmailSettings(e) {
     });
 
     if (res.ok) {
-      showToast('Configuración de correo guardada con éxito', 'success');
+      showToast('Configuración SMTP guardada', 'success');
       document.getElementById('smtp-password').value = '';
       loadEmailSettings();
     } else {
@@ -1614,34 +1624,35 @@ async function handleSaveEmailSettings(e) {
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.innerHTML = '<span>💾</span> Guardar Configuración';
+      submitBtn.innerHTML = '<span>💾</span> Guardar Configuración SMTP';
     }
   }
 }
 
-async function handleSendTestEmail() {
+async function handleSendDebugEmail() {
+  const target_email = document.getElementById('debug-target-email').value.trim();
   const sender_email = document.getElementById('smtp-sender-email').value.trim();
   const smtp_password = document.getElementById('smtp-password').value.trim();
   const sender_name = document.getElementById('smtp-sender-name').value.trim();
   const smtp_host = document.getElementById('smtp-host').value.trim();
   const smtp_port = parseInt(document.getElementById('smtp-port').value, 10) || 587;
 
-  const btn = document.getElementById('btn-test-email');
-  const resultBox = document.getElementById('email-test-result-box');
+  const btn = document.getElementById('btn-debug-email');
+  const resultBox = document.getElementById('email-debug-result-box');
 
-  if (!sender_email) {
-    showToast('Ingresa primero tu correo de Google', 'error');
+  if (!target_email || !target_email.includes('@')) {
+    showToast('Ingresa un correo destinatario válido en el campo de depuración', 'error');
     return;
   }
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span>⏳</span> Enviando prueba a jugadores...';
+    btn.innerHTML = '<span>⏳</span> Enviando a ' + target_email + '...';
   }
 
   if (resultBox) {
     resultBox.className = 'p-3 rounded-xl text-xs bg-slate-800 text-slate-300 border border-slate-700 block';
-    resultBox.innerHTML = 'Conectando con el servidor SMTP y buscando jugadores con correo...';
+    resultBox.innerHTML = `Conectando con el servidor SMTP y enviando a <strong>${target_email}</strong>...`;
   }
 
   try {
@@ -1649,12 +1660,12 @@ async function handleSendTestEmail() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        sender_email,
+        target_email,
+        sender_email: sender_email || undefined,
         smtp_password: smtp_password || undefined,
-        sender_name,
-        smtp_host,
-        smtp_port,
-        is_enabled: true,
+        sender_name: sender_name || undefined,
+        smtp_host: smtp_host || undefined,
+        smtp_port: smtp_port || undefined,
         use_tls: true
       })
     });
@@ -1662,19 +1673,18 @@ async function handleSendTestEmail() {
     const data = await res.json();
 
     if (res.ok) {
-      const recipientsHtml = (data.recipients || []).map(r => `<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[11px]">${r}</span>`).join(' ');
       resultBox.className = 'p-3 rounded-xl text-xs bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 block space-y-1';
       resultBox.innerHTML = `
-        <div class="font-bold flex items-center gap-1.5"><span>✅</span> ${data.message}</div>
-        <div class="text-[11px] text-slate-300">Destinatarios que recibieron el correo:</div>
-        <div class="flex flex-wrap gap-1.5 pt-1">${recipientsHtml}</div>
+        <div class="font-bold flex items-center gap-1.5"><span>✅</span> ¡Correo de prueba enviado con éxito!</div>
+        <div class="text-[11px] text-slate-300">Entregado a: <strong>${data.recipient}</strong>. Revisa tu bandeja de entrada o spam.</div>
       `;
       showToast('¡Correo de prueba enviado con éxito!', 'success');
-      loadEmailSettings();
+      loadEmailLogs();
     } else {
       resultBox.className = 'p-3 rounded-xl text-xs bg-rose-500/10 text-rose-300 border border-rose-500/30 block';
-      resultBox.innerHTML = `<strong>⚠️ Error:</strong> ${data.detail || 'No se pudo enviar el correo de prueba.'}`;
+      resultBox.innerHTML = `<strong>⚠️ Error:</strong> ${data.detail || 'No se pudo enviar el correo.'}`;
       showToast(data.detail || 'Error al enviar correo', 'error');
+      loadEmailLogs();
     }
   } catch (err) {
     if (resultBox) {
@@ -1685,7 +1695,392 @@ async function handleSendTestEmail() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<span>🚀</span> Enviar Correo de Prueba a Jugadores';
+      btn.innerHTML = '<span>🚀</span> Enviar Correo de Prueba (Depuración)';
     }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// AUTOMATIONS
+// -----------------------------------------------------------------------------
+async function loadAutomations() {
+  const container = document.getElementById('automations-list');
+  if (!container) return;
+  try {
+    const res = await fetch(getApiUrl('/api/settings/automations'));
+    if (!res.ok) return;
+    const list = await res.json();
+    cachedAutomations = list;
+
+    if (list.length === 0) {
+      container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">No hay automatizaciones creadas. Haz clic en "+ Nueva Automatización" para crear una.</div>`;
+      return;
+    }
+
+    container.innerHTML = list.map(a => {
+      const triggerBadge = a.trigger_type === 'session_finished'
+        ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">🏁 Al Finalizar Sesión</span>`
+        : (a.trigger_type === 'monthly'
+          ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">📅 Mensual (1º de mes)</span>`
+          : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-300 border border-blue-500/30">📆 Semanal</span>`);
+
+      const contentLabel = a.content_type === 'session_summary' ? 'Resumen de Sesión' : (a.content_type === 'global_leaderboard' ? 'Leaderboard Global' : 'Resumen Mensual');
+      const recipientsLabel = a.target_recipients === 'session_participants' ? '👥 Participantes de la sesión' : (a.target_recipients === 'all_players' ? '🌐 Todos los jugadores con correo' : `✉️ ${a.custom_emails || 'Personalizado'}`);
+
+      const activeBadge = a.is_active
+        ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Activa</span>`
+        : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-500 border border-slate-700">Inactiva</span>`;
+
+      return `
+        <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div class="space-y-1.5 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <strong class="text-white text-sm font-bold">${a.name}</strong>
+              ${triggerBadge}
+              ${activeBadge}
+            </div>
+            <div class="text-xs text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>📄 Contenido: <strong class="text-slate-300">${contentLabel}</strong></span>
+              <span>🎨 Plantilla: <strong class="text-indigo-300">${a.template_name || a.template_id}</strong></span>
+              <span>📫 Destinatarios: <strong class="text-slate-300">${recipientsLabel}</strong></span>
+            </div>
+            ${a.last_triggered_at ? `<div class="text-[10px] text-slate-500">Último disparo: ${new Date(a.last_triggered_at).toLocaleString()}</div>` : ''}
+          </div>
+
+          <div class="flex items-center gap-1.5 flex-wrap flex-shrink-0">
+            <button onclick="toggleAutomation(${a.id})" class="px-2.5 py-1 rounded-lg ${a.is_active ? 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'} text-xs font-semibold transition" title="Activar/Desactivar">
+              ${a.is_active ? '🟢 Activa' : '⚪ Inactiva'}
+            </button>
+            <button onclick="executeAutomationNow(${a.id})" class="p-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition" title="Ejecutar prueba ahora">
+              ▶️ Probar
+            </button>
+            <button onclick="openEditAutomationModal(${a.id})" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition" title="Editar automatización">
+              ✏️
+            </button>
+            <button onclick="duplicateAutomation(${a.id})" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition" title="Duplicar/Copiar">
+              📋
+            </button>
+            <button onclick="deleteAutomation(${a.id})" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/50 hover:text-rose-400 text-slate-500 text-xs transition" title="Eliminar automatización">
+              🗑️
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading automations:', err);
+  }
+}
+
+async function populateTemplatesDropdown(selectedId = '') {
+  const select = document.getElementById('automation-template');
+  if (!select) return;
+  await loadTemplates();
+  select.innerHTML = cachedTemplates.map(t => `<option value="${t.id}" ${t.id === selectedId ? 'selected' : ''}>${t.name}</option>`).join('');
+}
+
+function toggleCustomEmailsField() {
+  const select = document.getElementById('automation-recipients');
+  const container = document.getElementById('automation-custom-emails-container');
+  if (select && container) {
+    container.className = select.value === 'custom' ? 'block' : 'hidden';
+  }
+}
+
+async function openCreateAutomationModal() {
+  document.getElementById('automation-id').value = '';
+  document.getElementById('modal-automation-title').textContent = 'Nueva Automatización';
+  document.getElementById('automation-name').value = '';
+  document.getElementById('automation-trigger').value = 'session_finished';
+  document.getElementById('automation-content').value = 'session_summary';
+  document.getElementById('automation-recipients').value = 'session_participants';
+  document.getElementById('automation-custom-emails').value = '';
+  document.getElementById('automation-is-active').checked = true;
+  await populateTemplatesDropdown();
+  toggleCustomEmailsField();
+  openModal('modal-automation');
+}
+
+async function openEditAutomationModal(id) {
+  const auto = cachedAutomations.find(a => a.id === id);
+  if (!auto) return;
+  document.getElementById('automation-id').value = auto.id;
+  document.getElementById('modal-automation-title').textContent = 'Editar Automatización';
+  document.getElementById('automation-name').value = auto.name;
+  document.getElementById('automation-trigger').value = auto.trigger_type;
+  document.getElementById('automation-content').value = auto.content_type;
+  document.getElementById('automation-recipients').value = auto.target_recipients;
+  document.getElementById('automation-custom-emails').value = auto.custom_emails || '';
+  document.getElementById('automation-is-active').checked = Boolean(auto.is_active);
+  await populateTemplatesDropdown(auto.template_id);
+  toggleCustomEmailsField();
+  openModal('modal-automation');
+}
+
+async function handleSaveAutomation(e) {
+  e.preventDefault();
+  const id = document.getElementById('automation-id').value;
+  const name = document.getElementById('automation-name').value.trim();
+  const trigger_type = document.getElementById('automation-trigger').value;
+  const content_type = document.getElementById('automation-content').value;
+  const template_id = document.getElementById('automation-template').value;
+  const target_recipients = document.getElementById('automation-recipients').value;
+  const custom_emails = document.getElementById('automation-custom-emails').value.trim();
+  const is_active = document.getElementById('automation-is-active').checked;
+
+  if (!name) {
+    showToast('El nombre de la automatización es requerido', 'error');
+    return;
+  }
+
+  const payload = {
+    name,
+    trigger_type,
+    content_type,
+    template_id,
+    target_recipients,
+    custom_emails,
+    is_active
+  };
+
+  try {
+    const url = id ? `/api/settings/automations/${id}` : '/api/settings/automations';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(getApiUrl(url), {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      closeModal('modal-automation');
+      showToast(id ? 'Automatización actualizada' : 'Automatización creada', 'success');
+      loadAutomations();
+    } else {
+      showToast('Error al guardar automatización', 'error');
+    }
+  } catch (err) {
+    showToast('Error de conexión', 'error');
+  }
+}
+
+async function toggleAutomation(id) {
+  try {
+    const res = await fetch(getApiUrl(`/api/settings/automations/${id}/toggle`), { method: 'POST' });
+    if (res.ok) {
+      loadAutomations();
+      showToast('Estado de automatización actualizado', 'success');
+    }
+  } catch (err) {
+    showToast('Error al cambiar estado', 'error');
+  }
+}
+
+async function duplicateAutomation(id) {
+  try {
+    const res = await fetch(getApiUrl(`/api/settings/automations/${id}/duplicate`), { method: 'POST' });
+    if (res.ok) {
+      loadAutomations();
+      showToast('Automatización copiada con éxito', 'success');
+    }
+  } catch (err) {
+    showToast('Error al duplicar automatización', 'error');
+  }
+}
+
+async function deleteAutomation(id) {
+  if (!confirm('¿Seguro que deseas eliminar esta automatización?')) return;
+  try {
+    const res = await fetch(getApiUrl(`/api/settings/automations/${id}`), { method: 'DELETE' });
+    if (res.ok) {
+      loadAutomations();
+      showToast('Automatización eliminada', 'success');
+    }
+  } catch (err) {
+    showToast('Error al eliminar automatización', 'error');
+  }
+}
+
+async function executeAutomationNow(id) {
+  showToast('Ejecutando automatización...', 'info');
+  try {
+    const res = await fetch(getApiUrl(`/api/settings/automations/${id}/execute`), { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      showToast('¡Automatización ejecutada con éxito!', 'success');
+      loadAutomations();
+      loadEmailLogs();
+    } else {
+      showToast(data.detail || 'Error al ejecutar', 'error');
+    }
+  } catch (err) {
+    showToast('Error de conexión al ejecutar automatización', 'error');
+  }
+}
+
+// -----------------------------------------------------------------------------
+// TEMPLATES
+// -----------------------------------------------------------------------------
+async function loadTemplates() {
+  const container = document.getElementById('templates-grid');
+  try {
+    const res = await fetch(getApiUrl('/api/settings/templates'));
+    if (!res.ok) return;
+    const list = await res.json();
+    cachedTemplates = list;
+
+    if (!container) return;
+
+    if (list.length === 0) {
+      container.innerHTML = `<div class="col-span-2 text-center py-6 text-slate-500 text-xs">No hay plantillas registradas.</div>`;
+      return;
+    }
+
+    container.innerHTML = list.map(t => {
+      const badges = [];
+      if (t.include_podium) badges.push('<span class="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 text-[10px] font-semibold">👑 Podio</span>');
+      if (t.include_standings) badges.push('<span class="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 text-[10px] font-semibold">📊 Puntos</span>');
+      if (t.include_matches) badges.push('<span class="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300 text-[10px] font-semibold">📜 Partidas</span>');
+      if (t.include_metrics) badges.push('<span class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300 text-[10px] font-semibold">🏎️ Karts</span>');
+
+      return `
+        <div class="p-4 sm:p-5 rounded-2xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between space-y-3 shadow-sm">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="font-bold text-white text-sm sm:text-base">${t.name}</h3>
+              <span class="text-[10px] text-slate-500 font-mono">${t.id}</span>
+            </div>
+            <div class="text-xs text-slate-400 font-medium">Asunto: <span class="text-indigo-300">${t.subject_template}</span></div>
+            ${t.intro_text ? `<div class="text-[11px] text-slate-500 italic truncate">${t.intro_text}</div>` : ''}
+            <div class="flex flex-wrap gap-1.5 pt-1">${badges.join(' ')}</div>
+          </div>
+
+          <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+            <span class="text-[10px] text-slate-500">Banner: ${t.banner_url || 'Estándar'}</span>
+            <button onclick="openEditTemplateModal('${t.id}')" class="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition flex items-center gap-1">
+              <span>✏️</span> Editar Plantilla
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading templates:', err);
+  }
+}
+
+function insertVariableToSubject(varName) {
+  const inp = document.getElementById('template-subject');
+  if (inp) {
+    inp.value += ' ' + varName;
+    inp.focus();
+  }
+}
+
+async function openEditTemplateModal(templateId) {
+  const t = cachedTemplates.find(x => x.id === templateId);
+  if (!t) return;
+  document.getElementById('edit-template-id').value = t.id;
+  document.getElementById('template-name').value = t.name;
+  document.getElementById('template-subject').value = t.subject_template;
+  document.getElementById('template-banner-url').value = t.banner_url || 'static/img/email_banner.jpg';
+  document.getElementById('template-intro').value = t.intro_text || '';
+  document.getElementById('template-include-podium').checked = Boolean(t.include_podium);
+  document.getElementById('template-include-standings').checked = Boolean(t.include_standings);
+  document.getElementById('template-include-matches').checked = Boolean(t.include_matches);
+  document.getElementById('template-include-metrics').checked = Boolean(t.include_metrics);
+  document.getElementById('template-footer').value = t.footer_text || '';
+  openModal('modal-template');
+}
+
+async function handleSaveTemplate(e) {
+  e.preventDefault();
+  const templateId = document.getElementById('edit-template-id').value;
+  const name = document.getElementById('template-name').value.trim();
+  const subject_template = document.getElementById('template-subject').value.trim();
+  const banner_url = document.getElementById('template-banner-url').value.trim() || 'static/img/email_banner.jpg';
+  const intro_text = document.getElementById('template-intro').value.trim();
+  const include_podium = document.getElementById('template-include-podium').checked;
+  const include_standings = document.getElementById('template-include-standings').checked;
+  const include_matches = document.getElementById('template-include-matches').checked;
+  const include_metrics = document.getElementById('template-include-metrics').checked;
+  const footer_text = document.getElementById('template-footer').value.trim();
+
+  try {
+    const res = await fetch(getApiUrl(`/api/settings/templates/${templateId}`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        subject_template,
+        banner_url,
+        intro_text,
+        include_podium,
+        include_standings,
+        include_matches,
+        include_metrics,
+        footer_text
+      })
+    });
+
+    if (res.ok) {
+      closeModal('modal-template');
+      showToast('Plantilla guardada con éxito', 'success');
+      loadTemplates();
+    } else {
+      showToast('Error al guardar plantilla', 'error');
+    }
+  } catch (err) {
+    showToast('Error de conexión', 'error');
+  }
+}
+
+// -----------------------------------------------------------------------------
+// LOGS
+// -----------------------------------------------------------------------------
+async function loadEmailLogs() {
+  const tbody = document.getElementById('email-logs-table-body');
+  if (!tbody) return;
+  try {
+    const res = await fetch(getApiUrl('/api/settings/email/logs?limit=40'));
+    if (!res.ok) return;
+    const logs = await res.json();
+
+    if (logs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500 font-sans">No hay registros de envío recientes.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = logs.map(l => {
+      const isOk = l.status === 'sent';
+      const statusBadge = isOk
+        ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">✔ Enviado</span>`
+        : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30" title="${l.error_message || ''}">✖ Falló</span>`;
+
+      return `
+        <tr class="hover:bg-slate-900/60">
+          <td class="py-2 px-3 text-slate-400 text-[10px]">${new Date(l.created_at).toLocaleString([], {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'})}</td>
+          <td class="py-2 px-3 text-white font-medium truncate max-w-[140px]" title="${l.recipient}">${l.recipient}</td>
+          <td class="py-2 px-3 text-slate-300 truncate max-w-[160px]" title="${l.subject}">${l.subject}</td>
+          <td class="py-2 px-3 text-indigo-400 text-[10px] font-sans">${l.trigger_type}</td>
+          <td class="py-2 px-3 text-right">${statusBadge}</td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading email logs:', err);
+  }
+}
+
+async function handleClearEmailLogs() {
+  if (!confirm('¿Deseas limpiar todos los registros del historial de envíos?')) return;
+  try {
+    const res = await fetch(getApiUrl('/api/settings/email/logs'), { method: 'DELETE' });
+    if (res.ok) {
+      loadEmailLogs();
+      showToast('Historial de logs limpiado', 'success');
+    }
+  } catch (err) {
+    showToast('Error al limpiar logs', 'error');
   }
 }

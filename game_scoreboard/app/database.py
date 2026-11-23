@@ -105,6 +105,46 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_matches_practice ON matches(is_practice);
     CREATE INDEX IF NOT EXISTS idx_match_scores_match ON match_scores(match_id);
     CREATE INDEX IF NOT EXISTS idx_match_scores_player ON match_scores(player_id);
+
+    CREATE TABLE IF NOT EXISTS email_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipient TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        trigger_type TEXT NOT NULL DEFAULT 'test',
+        status TEXT NOT NULL,
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS email_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        subject_template TEXT NOT NULL,
+        banner_url TEXT,
+        intro_text TEXT,
+        include_podium INTEGER NOT NULL DEFAULT 1,
+        include_standings INTEGER NOT NULL DEFAULT 1,
+        include_matches INTEGER NOT NULL DEFAULT 1,
+        include_metrics INTEGER NOT NULL DEFAULT 1,
+        footer_text TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS automations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        trigger_type TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        template_id TEXT NOT NULL,
+        target_recipients TEXT NOT NULL DEFAULT 'session_participants',
+        custom_emails TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        last_triggered_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_email_logs_created ON email_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_automations_active ON automations(is_active);
     """)
     conn.commit()
 
@@ -158,6 +198,34 @@ def init_db():
             for r_idx, sc_row in enumerate(scores_to_fix, start=1):
                 cursor.execute("UPDATE match_scores SET rank_position = ? WHERE id = ?", (r_idx, sc_row["id"]))
         conn.commit()
+    except Exception:
+        pass
+
+    # Seed default templates if empty
+    try:
+        cursor.execute("SELECT COUNT(*) AS cnt FROM email_templates")
+        if cursor.fetchone()["cnt"] == 0:
+            cursor.execute("""
+            INSERT INTO email_templates (
+                id, name, subject_template, banner_url, intro_text,
+                include_podium, include_standings, include_matches, include_metrics, footer_text
+            ) VALUES
+            ('session_mario_kart', 'Reporte Mario Kart 8 Deluxe', '🏎️ Resultados Mario Kart 8: {{session_title}} 🏁', 'static/img/email_banner.jpg', '¡Aquí están los resultados oficiales de la noche de Mario Kart 8!', 1, 1, 1, 1, 'Game Scoreboard · Torneo de Amigos'),
+            ('session_generic', 'Reporte de Sesión General', '🏆 Resultados de Sesión: {{session_title}}', 'static/img/email_banner.jpg', 'Resumen general de las partidas y puntuaciones de la sesión.', 1, 1, 1, 1, 'Game Scoreboard · Home Assistant'),
+            ('monthly_digest', 'Resumen Mensual de Campeonatos', '📅 Resumen Mensual: {{month}} - Estadísticas y Récords', 'static/img/email_banner.jpg', 'Aquí está el resumen del mes con las estadísticas acumuladas y el podio general.', 1, 1, 0, 0, 'Game Scoreboard · Resumen Mensual Automático'),
+            ('global_leaderboard', 'Tabla de Posiciones Global', '🏅 Leaderboard Global Actualizado - Game Scoreboard', 'static/img/email_banner.jpg', 'Estado actual del campeonato y tabla de posiciones de todos los jugadores.', 1, 1, 0, 0, 'Game Scoreboard · Home Assistant')
+            """)
+            conn.commit()
+
+        cursor.execute("SELECT COUNT(*) AS cnt FROM automations")
+        if cursor.fetchone()["cnt"] == 0:
+            cursor.execute("""
+            INSERT INTO automations (
+                name, trigger_type, content_type, template_id, target_recipients, is_active
+            ) VALUES
+            ('Reporte al Finalizar Sesión', 'session_finished', 'session_summary', 'session_mario_kart', 'session_participants', 1)
+            """)
+            conn.commit()
     except Exception:
         pass
 
