@@ -11,14 +11,13 @@ let activeSessionId = null;
 
 // Helpers
 function getApiUrl(path) {
-  const base = window.__INGRESS_PATH__ || '';
-  const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
-  const cleanPath = path.startsWith('/') ? path : '/' + path;
-  return cleanBase + cleanPath;
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  return cleanPath;
 }
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
+  if (!container) return;
   const toast = document.createElement('div');
   const bg = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-indigo-600';
   toast.className = `toast px-4 py-3 rounded-xl text-white text-xs font-semibold shadow-xl flex items-center gap-2 pointer-events-auto ${bg}`;
@@ -33,12 +32,18 @@ function showToast(message, type = 'info') {
 
 function openModal(id) {
   const el = document.getElementById(id);
-  if (el) el.classList.remove('hidden');
+  if (el) {
+    el.classList.remove('hidden');
+    el.style.display = 'flex';
+  }
 }
 
 function closeModal(id) {
   const el = document.getElementById(id);
-  if (el) el.classList.add('hidden');
+  if (el) {
+    el.classList.add('hidden');
+    el.style.display = 'none';
+  }
 }
 
 // Tab Switching
@@ -49,13 +54,21 @@ function switchTab(tabId) {
     const section = document.getElementById(`tab-${t}`);
     const navBtn = document.getElementById(`nav-${t}`);
     if (t === tabId) {
-      section.classList.remove('hidden');
-      section.classList.add('tab-pane-active');
-      navBtn.className = 'nav-tab px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 text-indigo-400 bg-slate-800 shadow';
+      if (section) {
+        section.classList.remove('hidden');
+        section.style.display = 'block';
+      }
+      if (navBtn) {
+        navBtn.className = 'nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-indigo-300 bg-slate-800 border border-indigo-500/30 shadow';
+      }
     } else {
-      section.classList.add('hidden');
-      section.classList.remove('tab-pane-active');
-      navBtn.className = 'nav-tab px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200';
+      if (section) {
+        section.classList.add('hidden');
+        section.style.display = 'none';
+      }
+      if (navBtn) {
+        navBtn.className = 'nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50';
+      }
     }
   });
 

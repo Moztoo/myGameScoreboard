@@ -1,3 +1,30 @@
+/* Critical Utilities: Must work even if external CDN fails */
+.hidden {
+  display: none !important;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
+}
+
+/* Horizontal scroll bar for tabs and tables */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
@@ -16,7 +43,7 @@
 
 /* Animations & Transitions */
 .tab-pane-active {
-  display: block;
+  display: block !important;
   animation: fadeIn 0.2s ease-in-out;
 }
 
@@ -53,4 +80,10 @@
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* Safe touch targets for mobile buttons */
+button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }

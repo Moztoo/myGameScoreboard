@@ -91,8 +91,14 @@ async def serve_spa_root(request: Request):
     with open(INDEX_HTML, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Dynamic replacement of ingress path base
+    # Calculate ingress base with trailing slash for <base href="...">
+    if ingress_path:
+        ingress_base = ingress_path if ingress_path.endswith("/") else f"{ingress_path}/"
+    else:
+        ingress_base = "./"
+
     content = content.replace("__INGRESS_PATH_PLACEHOLDER__", ingress_path)
+    content = content.replace("__INGRESS_BASE_PLACEHOLDER__", ingress_base)
     return HTMLResponse(content=content)
 
 
