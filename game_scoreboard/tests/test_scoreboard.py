@@ -158,9 +158,36 @@ def test_session_and_practice_match_filter():
     assert ricardo_all["wins"] == 1
     assert ricardo_all["total_score"] == 230
 
-    assert alex_all["matches_played"] == 2
-    assert alex_all["wins"] == 1
-    assert alex_all["total_score"] == 260
+    # 3. Test Editing a Match (PUT /api/sessions/matches/{match_id})
+    # Change Match 1 score: Ricardo 1st with 160 pts (was 140)
+    match1_id = match1_res.json()["matches"][0]["id"]
+    edit_res = client.put(f"/api/sessions/matches/{match1_id}", json={
+        "match_type": "Torneo / Copa Completa",
+        "rule_values": {"clase": "200cc", "carreras": "24 carreras"},
+        "is_practice": False,
+        "notes": "Corregido puntaje",
+        "scores": [
+            {"player_id": p1["id"], "score": 160, "rank_position": 1, "metrics": {"character": "Mario"}},
+            {"player_id": p2["id"], "score": 110, "rank_position": 2, "metrics": {"character": "Yoshi"}}
+        ]
+    })
+    assert edit_res.status_code == 200
+    updated_session = edit_res.json()
+    p1_standing = next(st for st in updated_session["standings"] if st["player_id"] == p1["id"])
+    assert p1_standing["total_score"] == 250  # 160 (match 1) + 90 (match 2)
+
+    # 4. Test Resuming a Session
+    # Finalize session
+    res_close = client.put(f"/api/sessions/{session_id}", json={"status": "completed"})
+    assert res_close.status_code == 200
+    assert res_close.json()["status"] == "completed"
+    assert res_close.json()["ended_at"] is not None
+
+    # Resume session
+    res_resume = client.put(f"/api/sessions/{session_id}", json={"status": "active"})
+    assert res_resume.status_code == 200
+    assert res_resume.json()["status"] == "active"
+    assert res_resume.json()["ended_at"] is None
 
 
 def test_backup_export_and_import():

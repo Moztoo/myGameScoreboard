@@ -344,8 +344,15 @@ async function loadSessionsList() {
             <div class="flex items-center">
               ${playerAvatars}
             </div>
-            <div class="font-semibold text-slate-300">
-              ${s.total_matches} ${s.total_matches === 1 ? 'partida' : 'partidas'}
+            <div class="flex items-center gap-2.5">
+              <span class="font-semibold text-slate-300">
+                ${s.total_matches} ${s.total_matches === 1 ? 'partida' : 'partidas'}
+              </span>
+              ${s.status !== 'active' ? `
+                <button onclick="event.stopPropagation(); toggleSessionStatus(${s.id}, 'active')" class="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-[11px] transition flex items-center gap-1">
+                  <span>▶️</span> Reanudar
+                </button>
+              ` : ''}
             </div>
           </div>
         </div>
@@ -409,11 +416,12 @@ function closeSessionDetail() {
 }
 
 function renderSessionDetail(s) {
+  currentRecordingSession = s;
   const container = document.getElementById('session-detail-view');
 
   const statusBadge = s.status === 'active'
     ? `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">● En Curso</span>`
-    : `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700">Finalizada</span>`;
+    : `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">Finalizada</span>`;
 
   // Standings rows
   const standingsRows = s.standings.map((st, idx) => {
@@ -440,7 +448,7 @@ function renderSessionDetail(s) {
     `;
   }).join('');
 
-  // Matches list
+  // Matches list with Edit button
   const matchesHtml = s.matches.length === 0
     ? `<div class="text-center py-8 text-slate-500 text-xs">Aún no has registrado ninguna partida en esta sesión. Haz clic en "Registrar Partida" para comenzar.</div>`
     : s.matches.map(m => {
@@ -470,9 +478,14 @@ function renderSessionDetail(s) {
                 <span class="text-xs text-slate-300 font-semibold">(${m.match_type})</span>
                 ${practiceBadge}
               </div>
-              <div class="flex items-center gap-2">
-                <span class="text-[11px] text-slate-500">${new Date(m.played_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                <button onclick="handleDeleteMatch(${m.id})" class="text-slate-500 hover:text-rose-400 text-xs p-1" title="Eliminar partida">🗑️</button>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[11px] text-slate-500 mr-1">${new Date(m.played_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                <button onclick="openEditMatchModal(${m.id})" class="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition flex items-center gap-1" title="Editar partida">
+                  <span>✏️</span> Editar
+                </button>
+                <button onclick="handleDeleteMatch(${m.id})" class="p-1 rounded-lg bg-slate-900 hover:bg-rose-900/50 hover:text-rose-400 text-slate-500 text-xs transition" title="Eliminar partida">
+                  🗑️
+                </button>
               </div>
             </div>
 
@@ -492,6 +505,22 @@ function renderSessionDetail(s) {
       }).join('');
 
   container.innerHTML = `
+    <!-- Resumption Banner if completed -->
+    ${s.status !== 'active' ? `
+      <div class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+        <div class="flex items-center gap-2.5 text-xs text-amber-300">
+          <span class="text-xl">ℹ️</span>
+          <div>
+            <div class="font-bold text-amber-200">Esta sesión está marcada como Finalizada.</div>
+            <div>Puedes reanudarla en cualquier momento para seguir registrando partidas o editarlas.</div>
+          </div>
+        </div>
+        <button onclick="toggleSessionStatus(${s.id}, 'active')" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-1.5 transition flex-shrink-0">
+          <span>▶️</span> Reanudar Sesión Ahora
+        </button>
+      </div>
+    ` : ''}
+
     <!-- Header -->
     <div class="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -514,12 +543,12 @@ function renderSessionDetail(s) {
             <button onclick="openRecordMatchModal(${s.id})" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition">
               <span>🏁</span> Registrar Partida
             </button>
-            <button onclick="toggleSessionStatus(${s.id}, 'completed')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">
-              Finalizar Sesión
+            <button onclick="toggleSessionStatus(${s.id}, 'completed')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition flex items-center gap-1">
+              <span>🏁</span> Finalizar Sesión
             </button>
           ` : `
-            <button onclick="toggleSessionStatus(${s.id}, 'active')" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">
-              Reabrir Sesión
+            <button onclick="toggleSessionStatus(${s.id}, 'active')" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 transition">
+              <span>▶️</span> Reanudar Sesión
             </button>
           `}
           <button onclick="handleDeleteSession(${s.id})" class="p-2 rounded-xl bg-slate-800 hover:bg-rose-900/50 hover:text-rose-400 text-slate-400 text-xs transition" title="Eliminar sesión">
@@ -693,107 +722,244 @@ async function handleCreateSession(e) {
 }
 
 // -----------------------------------------------------------------------------
-// RECORD MATCH MODAL (DYNAMIC MARIO KART 8 / RULES)
+// RECORD & EDIT MATCH MODAL (DYNAMIC MARIO KART 8 / RULES & PLAYER CONFIG)
 // -----------------------------------------------------------------------------
 let currentRecordingSession = null;
+let currentEditingMatchId = null;
+let currentSelectedPlayerIds = new Set();
+let currentGameMetricsDef = null;
+let currentGameDefaultPoints = [15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+
+function toggleMatchPlayer(playerId, isChecked) {
+  if (isChecked) {
+    currentSelectedPlayerIds.add(playerId);
+  } else {
+    currentSelectedPlayerIds.delete(playerId);
+  }
+  updateMatchParticipantsUI();
+}
+
+function toggleAllMatchParticipants(selectAll) {
+  if (!currentRecordingSession) return;
+  if (selectAll) {
+    currentRecordingSession.players.forEach(p => currentSelectedPlayerIds.add(p.id));
+  } else {
+    currentSelectedPlayerIds.clear();
+  }
+  const checkboxes = document.querySelectorAll('input[name="match_participant_check"]');
+  checkboxes.forEach(cb => { cb.checked = selectAll; });
+  updateMatchParticipantsUI();
+}
+
+function updateMatchParticipantsUI(existingScoresMap = null) {
+  if (!currentRecordingSession) return;
+
+  const countBadge = document.getElementById('match-participants-count');
+  if (countBadge) {
+    const total = currentRecordingSession.players.length;
+    const selected = currentSelectedPlayerIds.size;
+    countBadge.textContent = `${selected} de ${total} jugadores`;
+  }
+
+  const scoresBody = document.getElementById('match-players-scores-body');
+  if (!scoresBody) return;
+
+  const selectedPlayers = currentRecordingSession.players.filter(p => currentSelectedPlayerIds.has(p.id));
+
+  if (selectedPlayers.length === 0) {
+    scoresBody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-amber-400 font-medium text-xs">⚠️ Selecciona arriba los jugadores que participan en esta partida.</td></tr>`;
+    return;
+  }
+
+  scoresBody.innerHTML = selectedPlayers.map((p, idx) => {
+    let rankVal = idx + 1;
+    let scoreVal = currentGameDefaultPoints[idx] !== undefined ? currentGameDefaultPoints[idx] : 0;
+    let metricVal = '';
+
+    if (existingScoresMap && existingScoresMap[p.id]) {
+      rankVal = existingScoresMap[p.id].rank_position;
+      scoreVal = existingScoresMap[p.id].score;
+      metricVal = existingScoresMap[p.id].metrics?.character || existingScoresMap[p.id].metrics?.kart || '';
+    }
+
+    let metricInput = `<input type="text" name="metric_${p.id}" value="${metricVal}" placeholder="ej. Mario / Yoshi" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">`;
+    if (currentGameMetricsDef && currentGameMetricsDef.type === 'select' && currentGameMetricsDef.options) {
+      const opts = currentGameMetricsDef.options.map(o => `
+        <option value="${o}" ${o === metricVal ? 'selected' : ''}>${o}</option>
+      `).join('');
+      metricInput = `<select name="metric_${p.id}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">${opts}</select>`;
+    }
+
+    return `
+      <tr class="hover:bg-slate-800/30">
+        <td class="py-2.5 px-3 flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: ${p.color_hex}"></span>
+          <span class="font-bold text-white">${p.nickname || p.name}</span>
+        </td>
+        <td class="py-2.5 px-3">
+          <input type="number" name="rank_${p.id}" value="${rankVal}" min="1" max="100" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-bold">
+        </td>
+        <td class="py-2.5 px-3">
+          <input type="number" name="score_${p.id}" value="${scoreVal}" step="any" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-400 font-black">
+        </td>
+        <td class="py-2.5 px-3">
+          ${metricInput}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function prepareMatchModalBase(session) {
+  currentRecordingSession = session;
+
+  const gameRes = await fetch(getApiUrl(`/api/games/${session.game_id}`));
+  const game = await gameRes.json();
+
+  currentGameDefaultPoints = game.default_points_system || [15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+  currentGameMetricsDef = (game.player_metrics || []).find(m => m.id === 'character') || game.player_metrics?.[0];
+
+  const extraTh = document.getElementById('match-extra-metric-th');
+  if (extraTh) extraTh.textContent = currentGameMetricsDef ? currentGameMetricsDef.name : 'Detalle';
+
+  // Match types dropdown
+  const matchTypeSelect = document.getElementById('match-type-select');
+  matchTypeSelect.innerHTML = (game.match_types || ['Partida Regular']).map(mt => `<option value="${mt}">${mt}</option>`).join('');
+
+  // Dynamic Game Rules (e.g. Mario Kart 8 fields: Clase, Equipos, Objetos, CPU, etc.)
+  const rulesGrid = document.getElementById('match-dynamic-rules-grid');
+  const rulesSection = document.getElementById('match-game-rules-section');
+
+  if (game.rule_settings && game.rule_settings.length > 0) {
+    rulesSection.classList.remove('hidden');
+    rulesGrid.innerHTML = game.rule_settings.map(r => {
+      const optionsHtml = (r.options || []).map(opt => `
+        <option value="${opt}" ${opt === r.default ? 'selected' : ''}>${opt}</option>
+      `).join('');
+
+      return `
+        <div>
+          <label class="block text-slate-400 font-semibold mb-1">${r.name}</label>
+          <select name="rule_${r.id}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500">
+            ${optionsHtml}
+          </select>
+        </div>
+      `;
+    }).join('');
+  } else {
+    rulesSection.classList.add('hidden');
+    rulesGrid.innerHTML = '';
+  }
+
+  return game;
+}
 
 async function openRecordMatchModal(sessionId) {
   try {
     const res = await fetch(getApiUrl(`/api/sessions/${sessionId}`));
     if (!res.ok) return;
     const session = await res.json();
-    currentRecordingSession = session;
 
-    const gameRes = await fetch(getApiUrl(`/api/games/${session.game_id}`));
-    const game = await gameRes.json();
+    currentEditingMatchId = null;
+    const game = await prepareMatchModalBase(session);
 
+    document.getElementById('match-modal-title').innerHTML = `<span>🏁</span> Registrar Partida #${session.matches.length + 1}`;
     document.getElementById('match-modal-subtitle').textContent = `Juego: ${game.name} · ${session.title}`;
+    document.getElementById('btn-save-match').textContent = 'Guardar Partida';
 
-    // Match types dropdown
-    const matchTypeSelect = document.getElementById('match-type-select');
-    matchTypeSelect.innerHTML = (game.match_types || ['Partida Regular']).map(mt => `<option value="${mt}">${mt}</option>`).join('');
+    // Select all session players by default
+    currentSelectedPlayerIds = new Set(session.players.map(p => p.id));
 
-    // Dynamic Game Rules (e.g. Mario Kart 8 fields: Clase, Equipos, Objetos, CPU, etc.)
-    const rulesGrid = document.getElementById('match-dynamic-rules-grid');
-    const rulesSection = document.getElementById('match-game-rules-section');
-
-    if (game.rule_settings && game.rule_settings.length > 0) {
-      rulesSection.classList.remove('hidden');
-      rulesGrid.innerHTML = game.rule_settings.map(r => {
-        const optionsHtml = (r.options || []).map(opt => `
-          <option value="${opt}" ${opt === r.default ? 'selected' : ''}>${opt}</option>
-        `).join('');
-
-        return `
-          <div>
-            <label class="block text-slate-400 font-semibold mb-1">${r.name}</label>
-            <select name="rule_${r.id}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500">
-              ${optionsHtml}
-            </select>
-          </div>
-        `;
-      }).join('');
-    } else {
-      rulesSection.classList.add('hidden');
-      rulesGrid.innerHTML = '';
+    // Render player selection checkboxes
+    const selectorGrid = document.getElementById('match-participants-selector-grid');
+    if (selectorGrid) {
+      selectorGrid.innerHTML = session.players.map(p => `
+        <label class="flex items-center gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition">
+          <input type="checkbox" name="match_participant_check" value="${p.id}" checked onchange="toggleMatchPlayer(${p.id}, this.checked)" class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+          <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${p.color_hex}"></span>
+          <span class="text-xs text-white font-medium truncate">${p.nickname || p.name}</span>
+        </label>
+      `).join('');
     }
-
-    // Default points suggestion based on game scoring
-    const defaultPoints = game.default_points_system || [15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-
-    // Player scores table
-    const scoresBody = document.getElementById('match-players-scores-body');
-    const extraTh = document.getElementById('match-extra-metric-th');
-    const metricDef = (game.player_metrics || []).find(m => m.id === 'character') || game.player_metrics?.[0];
-
-    extraTh.textContent = metricDef ? metricDef.name : 'Detalle';
-
-    scoresBody.innerHTML = session.players.map((p, idx) => {
-      const suggestedRank = idx + 1;
-      const suggestedScore = defaultPoints[idx] !== undefined ? defaultPoints[idx] : 0;
-
-      // Metric input (e.g. Character dropdown for Mario Kart 8)
-      let metricInput = `<input type="text" name="metric_${p.id}" placeholder="ej. Mario / Yoshi" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">`;
-      if (metricDef && metricDef.type === 'select' && metricDef.options) {
-        const opts = metricDef.options.map(o => `<option value="${o}">${o}</option>`).join('');
-        metricInput = `<select name="metric_${p.id}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">${opts}</select>`;
-      }
-
-      return `
-        <tr class="hover:bg-slate-800/30">
-          <td class="py-2.5 px-3 flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${p.color_hex}"></span>
-            <span class="font-bold text-white">${p.nickname || p.name}</span>
-          </td>
-          <td class="py-2.5 px-3">
-            <input type="number" name="rank_${p.id}" value="${suggestedRank}" min="1" max="100" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-bold">
-          </td>
-          <td class="py-2.5 px-3">
-            <input type="number" name="score_${p.id}" value="${suggestedScore}" step="any" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-400 font-black">
-          </td>
-          <td class="py-2.5 px-3">
-            ${metricInput}
-          </td>
-        </tr>
-      `;
-    }).join('');
 
     document.getElementById('match-is-practice').checked = false;
     document.getElementById('match-notes').value = '';
 
+    updateMatchParticipantsUI();
     openModal('modal-match');
   } catch (err) {
     console.error('Error opening match modal:', err);
   }
 }
 
-async function handleCreateMatch(e) {
+async function openEditMatchModal(matchId) {
+  if (!currentRecordingSession) return;
+  const match = currentRecordingSession.matches.find(m => m.id === matchId);
+  if (!match) return;
+
+  try {
+    currentEditingMatchId = matchId;
+    const game = await prepareMatchModalBase(currentRecordingSession);
+
+    document.getElementById('match-modal-title').innerHTML = `<span>✏️</span> Editar Partida #${match.match_number}`;
+    document.getElementById('match-modal-subtitle').textContent = `Modificando resultados de Partida #${match.match_number} (${match.match_type})`;
+    document.getElementById('btn-save-match').textContent = 'Actualizar Partida';
+
+    // Set match type
+    const matchTypeSelect = document.getElementById('match-type-select');
+    if (matchTypeSelect) matchTypeSelect.value = match.match_type;
+
+    // Set practice
+    document.getElementById('match-is-practice').checked = Boolean(match.is_practice);
+    document.getElementById('match-notes').value = match.notes || '';
+
+    // Set dynamic rules
+    Object.entries(match.rule_values || {}).forEach(([k, v]) => {
+      const el = document.querySelector(`[name="rule_${k}"]`);
+      if (el) el.value = v;
+    });
+
+    // Populate players that were in this match
+    const matchPlayerIds = new Set(match.scores.map(s => s.player_id));
+    currentSelectedPlayerIds = matchPlayerIds;
+
+    const selectorGrid = document.getElementById('match-participants-selector-grid');
+    if (selectorGrid) {
+      selectorGrid.innerHTML = currentRecordingSession.players.map(p => {
+        const checked = matchPlayerIds.has(p.id) ? 'checked' : '';
+        return `
+          <label class="flex items-center gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition">
+            <input type="checkbox" name="match_participant_check" value="${p.id}" ${checked} onchange="toggleMatchPlayer(${p.id}, this.checked)" class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+            <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${p.color_hex}"></span>
+            <span class="text-xs text-white font-medium truncate">${p.nickname || p.name}</span>
+          </label>
+        `;
+      }).join('');
+    }
+
+    // Map existing scores
+    const existingScoresMap = {};
+    match.scores.forEach(sc => { existingScoresMap[sc.player_id] = sc; });
+
+    updateMatchParticipantsUI(existingScoresMap);
+    openModal('modal-match');
+  } catch (err) {
+    console.error('Error opening edit match modal:', err);
+  }
+}
+
+async function handleCreateOrUpdateMatch(e) {
   e.preventDefault();
   if (!currentRecordingSession) return;
 
   const match_type = document.getElementById('match-type-select').value;
   const is_practice = document.getElementById('match-is-practice').checked;
   const notes = document.getElementById('match-notes').value;
+
+  if (currentSelectedPlayerIds.size === 0) {
+    showToast('Selecciona al menos un jugador que haya participado en la partida', 'error');
+    return;
+  }
 
   // Collect dynamic rules
   const rule_values = {};
@@ -803,12 +969,12 @@ async function handleCreateMatch(e) {
     rule_values[key] = inp.value;
   });
 
-  // Collect scores
+  // Collect scores only for participating players
   const scores = [];
-  currentRecordingSession.players.forEach(p => {
-    const rankInp = document.querySelector(`[name="rank_${p.id}"]`);
-    const scoreInp = document.querySelector(`[name="score_${p.id}"]`);
-    const metricInp = document.querySelector(`[name="metric_${p.id}"]`);
+  currentSelectedPlayerIds.forEach(playerId => {
+    const rankInp = document.querySelector(`[name="rank_${playerId}"]`);
+    const scoreInp = document.querySelector(`[name="score_${playerId}"]`);
+    const metricInp = document.querySelector(`[name="metric_${playerId}"]`);
 
     const rank_position = rankInp ? parseInt(rankInp.value, 10) || 1 : 1;
     const score = scoreInp ? parseFloat(scoreInp.value) || 0 : 0;
@@ -818,16 +984,30 @@ async function handleCreateMatch(e) {
     }
 
     scores.push({
-      player_id: p.id,
+      player_id: playerId,
       score,
       rank_position,
       metrics
     });
   });
 
+  const submitBtn = document.getElementById('btn-save-match');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando...';
+  }
+
   try {
-    const res = await fetch(getApiUrl(`/api/sessions/${currentRecordingSession.id}/matches`), {
-      method: 'POST',
+    let url = `/api/sessions/${currentRecordingSession.id}/matches`;
+    let method = 'POST';
+
+    if (currentEditingMatchId) {
+      url = `/api/sessions/matches/${currentEditingMatchId}`;
+      method = 'PUT';
+    }
+
+    const res = await fetch(getApiUrl(url), {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         match_type,
@@ -840,13 +1020,19 @@ async function handleCreateMatch(e) {
 
     if (res.ok) {
       closeModal('modal-match');
-      showToast(is_practice ? 'Partida de práctica registrada' : '¡Partida oficial registrada con éxito!', 'success');
+      showToast(currentEditingMatchId ? '¡Partida actualizada con éxito!' : (is_practice ? 'Partida de práctica registrada' : '¡Partida oficial guardada!'), 'success');
+      currentEditingMatchId = null;
       viewSession(currentRecordingSession.id);
     } else {
-      showToast('Error al registrar la partida', 'error');
+      showToast('Error al guardar la partida', 'error');
     }
   } catch (err) {
     showToast('Error de conexión', 'error');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = currentEditingMatchId ? 'Actualizar Partida' : 'Guardar Partida';
+    }
   }
 }
 

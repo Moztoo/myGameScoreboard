@@ -243,11 +243,68 @@ def update_session(session_id: int, data: SessionUpdate):
         UPDATE sessions SET title = ?, notes = ?, status = ?, ended_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """, (title, notes, status, session_id))
+    elif status == "active":
+        cursor.execute("""
+        UPDATE sessions SET title = ?, notes = ?, status = 'active', ended_at = NULL
+        WHERE id = ?
+        """, (title, notes, session_id))
     else:
         cursor.execute("""
         UPDATE sessions SET title = ?, notes = ?, status = ?, ended_at = ?
         WHERE id = ?
         """, (title, notes, status, ended_at, session_id))
+
+    conn.commit()
+    conn.close()
+    return get_session(session_id)
+
+
+@router.put("/matches/{match_id}", response_model=Dict[str, Any])
+def update_match(match_id: int, match_data: MatchCreate):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT session_id, match_number FROM matches WHERE id = ?", (match_id,))
+    existing = cursor.fetchone()
+    if not existing:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Partida no encontrada")
+    session_id = existing["session_id"]
+
+    cursor.execute("""
+    UPDATE matches SET
+        match_type = ?,
+        rule_values_json = ?,
+        is_practice = ?,
+        notes = ?
+    WHERE id = ?
+    """, (
+        match_data.match_type,
+        json.dumps(match_data.rule_values),
+        1 if match_data.is_practice else 0,
+        match_data.notes or "",
+        match_id
+    ))
+
+    # Replace scores for this match
+    cursor.execute("DELETE FROM match_scores WHERE match_id = ?", (match_id,))
+
+    for sc in match_data.scores:
+        cursor.execute("""
+        INSERT INTO match_scores (match_id, player_id, score, rank_position, metrics_json)
+        VALUES (?, ?, ?, ?, ?)
+        """, (
+            match_id,
+            sc.player_id,
+            sc.score,
+            sc.rank_position,
+            json.dumps(sc.metrics)
+        ))
+
+        cursor.execute("""
+        INSERT OR IGNORE INTO session_players (session_id, player_id)
+        VALUES (?, ?)
+        """, (session_id, sc.player_id))
 
     conn.commit()
     conn.close()
