@@ -76,6 +76,7 @@ function switchTab(tabId) {
   if (tabId === 'sessions') loadSessionsTab();
   if (tabId === 'players') loadPlayers();
   if (tabId === 'games') loadGames();
+  if (tabId === 'backup') loadEmailSettings();
 }
 
 // -----------------------------------------------------------------------------
@@ -1532,3 +1533,159 @@ async function ensurePlayersLoaded(force = false) {
 document.addEventListener('DOMContentLoaded', () => {
   loadDashboard();
 });
+
+// -----------------------------------------------------------------------------
+// EMAIL SETTINGS & TEST EMAIL
+// -----------------------------------------------------------------------------
+async function loadEmailSettings() {
+  try {
+    const res = await fetch(getApiUrl('/api/settings/email'));
+    if (!res.ok) return;
+    const cfg = await res.json();
+
+    const senderInp = document.getElementById('smtp-sender-email');
+    const nameInp = document.getElementById('smtp-sender-name');
+    const hostInp = document.getElementById('smtp-host');
+    const portInp = document.getElementById('smtp-port');
+    const passInp = document.getElementById('smtp-password');
+    const passHint = document.getElementById('smtp-password-hint');
+    const badge = document.getElementById('email-configured-badge');
+
+    if (senderInp) senderInp.value = cfg.sender_email || '';
+    if (nameInp) nameInp.value = cfg.sender_name || 'Game Scoreboard 🎮';
+    if (hostInp) hostInp.value = cfg.smtp_host || 'smtp.gmail.com';
+    if (portInp) portInp.value = cfg.smtp_port || 587;
+
+    if (cfg.has_password) {
+      if (passInp) passInp.placeholder = '•••••••• (Contraseña guardada)';
+      if (passHint) passHint.textContent = 'Contraseña de aplicación guardada. Déjalo en blanco si no deseas cambiarla.';
+      if (badge) badge.classList.remove('hidden');
+    } else {
+      if (badge) badge.classList.add('hidden');
+    }
+  } catch (err) {
+    console.error('Error loading email settings:', err);
+  }
+}
+
+async function handleSaveEmailSettings(e) {
+  e.preventDefault();
+  const sender_email = document.getElementById('smtp-sender-email').value.trim();
+  const smtp_password = document.getElementById('smtp-password').value.trim();
+  const sender_name = document.getElementById('smtp-sender-name').value.trim();
+  const smtp_host = document.getElementById('smtp-host').value.trim();
+  const smtp_port = parseInt(document.getElementById('smtp-port').value, 10) || 587;
+  const submitBtn = document.getElementById('btn-save-email-settings');
+
+  if (!sender_email) {
+    showToast('Ingresa tu correo remitente', 'error');
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando...';
+  }
+
+  try {
+    const res = await fetch(getApiUrl('/api/settings/email'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender_email,
+        smtp_password: smtp_password || undefined,
+        sender_name,
+        smtp_host,
+        smtp_port,
+        is_enabled: true,
+        use_tls: true
+      })
+    });
+
+    if (res.ok) {
+      showToast('Configuración de correo guardada con éxito', 'success');
+      document.getElementById('smtp-password').value = '';
+      loadEmailSettings();
+    } else {
+      showToast('Error al guardar configuración', 'error');
+    }
+  } catch (err) {
+    showToast('Error de conexión', 'error');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>💾</span> Guardar Configuración';
+    }
+  }
+}
+
+async function handleSendTestEmail() {
+  const sender_email = document.getElementById('smtp-sender-email').value.trim();
+  const smtp_password = document.getElementById('smtp-password').value.trim();
+  const sender_name = document.getElementById('smtp-sender-name').value.trim();
+  const smtp_host = document.getElementById('smtp-host').value.trim();
+  const smtp_port = parseInt(document.getElementById('smtp-port').value, 10) || 587;
+
+  const btn = document.getElementById('btn-test-email');
+  const resultBox = document.getElementById('email-test-result-box');
+
+  if (!sender_email) {
+    showToast('Ingresa primero tu correo de Google', 'error');
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> Enviando prueba a jugadores...';
+  }
+
+  if (resultBox) {
+    resultBox.className = 'p-3 rounded-xl text-xs bg-slate-800 text-slate-300 border border-slate-700 block';
+    resultBox.innerHTML = 'Conectando con el servidor SMTP y buscando jugadores con correo...';
+  }
+
+  try {
+    const res = await fetch(getApiUrl('/api/settings/email/test'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender_email,
+        smtp_password: smtp_password || undefined,
+        sender_name,
+        smtp_host,
+        smtp_port,
+        is_enabled: true,
+        use_tls: true
+      })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      const recipientsHtml = (data.recipients || []).map(r => `<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[11px]">${r}</span>`).join(' ');
+      resultBox.className = 'p-3 rounded-xl text-xs bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 block space-y-1';
+      resultBox.innerHTML = `
+        <div class="font-bold flex items-center gap-1.5"><span>✅</span> ${data.message}</div>
+        <div class="text-[11px] text-slate-300">Destinatarios que recibieron el correo:</div>
+        <div class="flex flex-wrap gap-1.5 pt-1">${recipientsHtml}</div>
+      `;
+      showToast('¡Correo de prueba enviado con éxito!', 'success');
+      loadEmailSettings();
+    } else {
+      resultBox.className = 'p-3 rounded-xl text-xs bg-rose-500/10 text-rose-300 border border-rose-500/30 block';
+      resultBox.innerHTML = `<strong>⚠️ Error:</strong> ${data.detail || 'No se pudo enviar el correo de prueba.'}`;
+      showToast(data.detail || 'Error al enviar correo', 'error');
+    }
+  } catch (err) {
+    if (resultBox) {
+      resultBox.className = 'p-3 rounded-xl text-xs bg-rose-500/10 text-rose-300 border border-rose-500/30 block';
+      resultBox.innerHTML = `<strong>⚠️ Error de conexión:</strong> ${err.message || 'No se pudo contactar con el backend.'}`;
+    }
+    showToast('Error de conexión', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🚀</span> Enviar Correo de Prueba a Jugadores';
+    }
+  }
+}

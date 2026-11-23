@@ -287,3 +287,50 @@ def test_backup_export_and_import():
     restored_player = next((x for x in players_after if x["name"] == "Player Export Test"), None)
     assert restored_player is not None
     assert restored_player["nickname"] == "BackupUser"
+
+
+def test_email_settings_and_test_trigger():
+    """Verify email configuration saving and mock SMTP test delivery."""
+    from unittest.mock import MagicMock, patch
+
+    # 1. Fetch initial settings
+    get_res = client.get("/api/settings/email")
+    assert get_res.status_code == 200
+    assert "smtp_host" in get_res.json()
+
+    # 2. Save settings
+    save_res = client.post("/api/settings/email", json={
+        "smtp_host": "smtp.gmail.com",
+        "smtp_port": 587,
+        "sender_email": "server@gmail.com",
+        "sender_name": "Game Scoreboard Test",
+        "smtp_password": "abcd efgh ijkl mnop",
+        "use_tls": True
+    })
+    assert save_res.status_code == 200
+    assert save_res.json()["sender_email"] == "server@gmail.com"
+    assert save_res.json()["has_password"] is True
+
+    # 3. Create a player with email
+    client.post("/api/players", json={
+        "name": "Target Player",
+        "nickname": "PlayerEmail",
+        "email": "friend@gmail.com"
+    })
+
+    # 4. Trigger test email with mocked smtplib.SMTP
+    with patch("smtplib.SMTP") as mock_smtp_class:
+        mock_instance = MagicMock()
+        mock_smtp_class.return_value = mock_instance
+
+        test_res = client.post("/api/settings/email/test")
+        assert test_res.status_code == 200
+        data = test_res.json()
+        assert data["status"] == "ok"
+        assert "friend@gmail.com" in data["recipients"]
+
+        # Verify SMTP interactions
+        mock_instance.starttls.assert_called_once()
+        mock_instance.login.assert_called_once_with("server@gmail.com", "abcdefghijklmnop")
+        mock_instance.sendmail.assert_called_once()
+        mock_instance.quit.assert_called_once()

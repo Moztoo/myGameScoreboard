@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db, AVATARS_DIR
-from routers import games, players, sessions, stats, backup
+from routers import games, players, sessions, stats, backup, settings
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Game Scoreboard Add-on",
     description="Scoreboard nativo de videojuegos para Home Assistant",
-    version="1.0.6",
+    version="1.0.7",
     lifespan=lifespan
 )
 
@@ -42,6 +42,7 @@ app.include_router(players.router)
 app.include_router(sessions.router)
 app.include_router(stats.router)
 app.include_router(backup.router)
+app.include_router(settings.router)
 
 # Ensure avatar and static directories
 AVATARS_DIR.mkdir(parents=True, exist_ok=True)

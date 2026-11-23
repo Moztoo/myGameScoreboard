@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import List, Dict, Any, Optional
 import json
 from database import get_db_connection
 from models import SessionCreate, SessionUpdate, MatchCreate
+from email_service import send_session_report_email
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -224,7 +225,7 @@ def create_session(data: SessionCreate):
 
 
 @router.put("/{session_id}", response_model=Dict[str, Any])
-def update_session(session_id: int, data: SessionUpdate):
+def update_session(session_id: int, data: SessionUpdate, background_tasks: BackgroundTasks):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
@@ -243,6 +244,8 @@ def update_session(session_id: int, data: SessionUpdate):
         UPDATE sessions SET title = ?, notes = ?, status = ?, ended_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """, (title, notes, status, session_id))
+        if existing["status"] != "completed":
+            background_tasks.add_task(send_session_report_email, session_id)
     elif status == "active":
         cursor.execute("""
         UPDATE sessions SET title = ?, notes = ?, status = 'active', ended_at = NULL
