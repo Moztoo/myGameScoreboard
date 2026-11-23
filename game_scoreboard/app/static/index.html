@@ -16,7 +16,7 @@
     }
   </script>
   <!-- Local Critical CSS First -->
-  <link rel="stylesheet" href="static/css/styles.css?v=1.0.9">
+  <link rel="stylesheet" href="static/css/styles.css?v=1.0.10">
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -58,7 +58,7 @@
           <div>
             <div class="flex items-center gap-1.5">
               <span class="text-sm sm:text-base font-black tracking-tight text-white">Game Scoreboard</span>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.0.9</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.0.10</span>
             </div>
             <p class="text-[10px] sm:text-xs text-slate-400">Torneos y Partidas entre Amigos</p>
           </div>
@@ -589,51 +589,6 @@
         </div>
       </div>
     </section>
-        <div>
-          <h2 class="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-            <span>💾</span> Exportar y Respaldar Información
-          </h2>
-          <p class="text-xs text-slate-400 mt-1">
-            Descarga un respaldo comprimido `.ZIP` con toda la base de datos (sesiones, partidas, jugadores, puntos) y las fotos de los avatares para moverlo a otra instancia de Home Assistant o respaldarlo en tu PC.
-          </p>
-        </div>
-
-        <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div class="font-bold text-white text-xs sm:text-sm">Exportar Respaldo Completo</div>
-            <div class="text-[11px] text-slate-400">Descarga base de datos SQLite y fotos en ZIP.</div>
-          </div>
-          <button onclick="downloadBackup()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2">
-            <span>⬇️</span> Descargar ZIP
-          </button>
-        </div>
-
-        <hr class="border-slate-800">
-
-        <div>
-          <h3 class="text-xs sm:text-sm font-bold text-white mb-1.5">Restaurar Respaldo en Esta Instancia</h3>
-          <p class="text-[11px] text-slate-400 mb-3">
-            Sube un archivo `.ZIP` exportado previamente. <span class="text-amber-400 font-medium">Nota:</span> Esto reemplazará los datos actuales con los del respaldo.
-          </p>
-
-          <form id="import-form" onsubmit="handleImportBackup(event)" class="space-y-3">
-            <div class="flex items-center justify-center w-full">
-              <label for="import-file" class="flex flex-col items-center justify-center w-full h-28 border-2 border-slate-700 border-dashed rounded-xl cursor-pointer bg-slate-950/40 hover:bg-slate-950/70 transition">
-                <div class="flex flex-col items-center justify-center p-3 text-center">
-                  <span class="text-2xl mb-1">📦</span>
-                  <p class="text-xs text-slate-300 font-medium"><span class="font-semibold text-indigo-400">Toca para seleccionar</span> el archivo ZIP</p>
-                  <p class="text-[10px] text-slate-500 mt-0.5" id="import-file-name">scoreboard_backup_*.zip</p>
-                </div>
-                <input id="import-file" type="file" accept=".zip" class="hidden" onchange="updateImportFileName(this)">
-              </label>
-            </div>
-            <button type="submit" id="btn-import-submit" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/20 transition disabled:opacity-50">
-              Restaurar Respaldo Ahora
-            </button>
-          </form>
-        </div>
-      </div>
-    </section>
 
   </main>
 
@@ -947,6 +902,6 @@
   </div>
 
   <!-- JavaScript Code: loaded with relative path supported by <base> -->
-  <script src="static/js/app.js?v=1.0.9"></script>
+  <script src="static/js/app.js?v=1.0.10"></script>
 </body>
 </html>
