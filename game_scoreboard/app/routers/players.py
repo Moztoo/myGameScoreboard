@@ -16,7 +16,7 @@ def list_players():
     # Compute basic stats per player (excluding practice matches)
     cursor.execute("""
     SELECT 
-        p.id, p.name, p.nickname, p.avatar_url, p.color_hex, p.created_at,
+        p.id, p.name, p.nickname, p.email, p.avatar_url, p.color_hex, p.created_at,
         COUNT(DISTINCT ms.id) AS total_matches,
         SUM(CASE WHEN ms.rank_position = 1 THEN 1 ELSE 0 END) AS wins
     FROM players p
@@ -37,6 +37,7 @@ def list_players():
             "id": r["id"],
             "name": r["name"],
             "nickname": r["nickname"] or "",
+            "email": r["email"] or "",
             "avatar_url": r["avatar_url"],
             "color_hex": r["color_hex"] or "#3b82f6",
             "created_at": str(r["created_at"]),
@@ -79,6 +80,7 @@ def get_player(player_id: int):
         "id": row["id"],
         "name": row["name"],
         "nickname": row["nickname"] or "",
+        "email": row["email"] or "",
         "avatar_url": row["avatar_url"],
         "color_hex": row["color_hex"] or "#3b82f6",
         "created_at": str(row["created_at"]),
@@ -102,9 +104,9 @@ def create_player(player: PlayerCreate):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO players (name, nickname, color_hex)
-    VALUES (?, ?, ?)
-    """, (player.name, player.nickname or "", player.color_hex or "#3b82f6"))
+    INSERT INTO players (name, nickname, email, color_hex)
+    VALUES (?, ?, ?, ?)
+    """, (player.name, player.nickname or "", player.email or "", player.color_hex or "#3b82f6"))
     new_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -123,12 +125,13 @@ def update_player(player_id: int, player: PlayerUpdate):
 
     name = player.name if player.name is not None else existing["name"]
     nickname = player.nickname if player.nickname is not None else existing["nickname"]
+    email = player.email if player.email is not None else existing["email"]
     color_hex = player.color_hex if player.color_hex is not None else existing["color_hex"]
 
     cursor.execute("""
-    UPDATE players SET name = ?, nickname = ?, color_hex = ?
+    UPDATE players SET name = ?, nickname = ?, email = ?, color_hex = ?
     WHERE id = ?
-    """, (name, nickname, color_hex, player_id))
+    """, (name, nickname, email, color_hex, player_id))
     conn.commit()
     conn.close()
     return get_player(player_id)

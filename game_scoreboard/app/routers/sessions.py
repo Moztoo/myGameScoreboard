@@ -39,7 +39,7 @@ def list_sessions(game_id: Optional[str] = None, status: Optional[str] = None):
         session_id = r["id"]
         # Fetch participating players
         cursor.execute("""
-        SELECT p.id, p.name, p.nickname, p.avatar_url, p.color_hex
+        SELECT p.id, p.name, p.nickname, p.email, p.avatar_url, p.color_hex
         FROM players p
         JOIN session_players sp ON p.id = sp.player_id
         WHERE sp.session_id = ?
@@ -83,7 +83,7 @@ def get_session(session_id: int):
 
     # Fetch participating players
     cursor.execute("""
-    SELECT p.id, p.name, p.nickname, p.avatar_url, p.color_hex
+    SELECT p.id, p.name, p.nickname, p.email, p.avatar_url, p.color_hex
     FROM players p
     JOIN session_players sp ON p.id = sp.player_id
     WHERE sp.session_id = ?

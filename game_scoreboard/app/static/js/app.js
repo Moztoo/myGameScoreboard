@@ -1126,19 +1126,26 @@ async function loadPlayers() {
 
     container.innerHTML = players.map(p => {
       const avatarHtml = p.avatar_url
-        ? `<img src="${getApiUrl(p.avatar_url)}" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 shadow-md" style="border-color: ${p.color_hex}">`
-        : `<div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center font-black text-lg sm:text-xl text-white shadow-md" style="background-color: ${p.color_hex}">${p.name.substring(0, 2).toUpperCase()}</div>`;
+        ? `<img src="${getApiUrl(p.avatar_url)}" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 shadow-md flex-shrink-0" style="border-color: ${p.color_hex}">`
+        : `<div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center font-black text-lg sm:text-xl text-white shadow-md flex-shrink-0" style="background-color: ${p.color_hex}">${p.name.substring(0, 2).toUpperCase()}</div>`;
+
+      const emailHtml = p.email
+        ? `<div class="text-[11px] text-indigo-300 truncate flex items-center gap-1 mt-0.5" title="${p.email}"><span>✉️</span> <span class="truncate">${p.email}</span></div>`
+        : `<div class="text-[11px] text-slate-500 italic mt-0.5">Sin correo</div>`;
 
       return `
-        <div class="game-card-hover p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between space-y-3.5 shadow-sm relative">
-          <button onclick="handleDeletePlayer(${p.id})" class="absolute top-3 right-3 text-slate-600 hover:text-rose-400 text-xs p-1 transition" title="Eliminar jugador">✕</button>
+        <div class="game-card-hover p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between space-y-3 shadow-sm relative">
+          <div class="absolute top-3 right-3 flex items-center gap-1">
+            <button onclick="openEditPlayerModal(${p.id})" class="p-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600/30 text-indigo-300 text-xs transition" title="Editar perfil">✏️</button>
+            <button onclick="handleDeletePlayer(${p.id})" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/50 text-slate-500 hover:text-rose-400 text-xs transition" title="Eliminar jugador">✕</button>
+          </div>
 
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3 pr-14">
             ${avatarHtml}
-            <div>
-              <h4 class="font-bold text-white text-sm sm:text-base leading-tight">${p.name}</h4>
+            <div class="min-w-0">
+              <h4 class="font-bold text-white text-sm sm:text-base leading-tight truncate">${p.name}</h4>
               <div class="text-xs text-indigo-400 font-mono">${p.nickname ? '@' + p.nickname : 'Sin apodo'}</div>
-              <div class="text-[10px] text-slate-500 mt-0.5">Registrado: ${new Date(p.created_at).toLocaleDateString()}</div>
+              ${emailHtml}
             </div>
           </div>
 
@@ -1156,6 +1163,10 @@ async function loadPlayers() {
               <div class="font-bold text-amber-400 text-xs sm:text-sm">${p.win_rate}%</div>
             </div>
           </div>
+
+          <button onclick="openEditPlayerModal(${p.id})" class="w-full py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+            <span>✏️</span> Editar Perfil
+          </button>
         </div>
       `;
     }).join('');
@@ -1168,12 +1179,14 @@ async function handleCreatePlayer(e) {
   e.preventDefault();
   const nameInp = document.getElementById('player-name');
   const nickInp = document.getElementById('player-nickname');
+  const emailInp = document.getElementById('player-email');
   const colorInp = document.getElementById('player-color');
   const fileInput = document.getElementById('player-avatar-file');
   const submitBtn = document.getElementById('btn-save-player');
 
   const name = nameInp ? nameInp.value.trim() : '';
   const nickname = nickInp ? nickInp.value.trim() : '';
+  const email = emailInp ? emailInp.value.trim() : '';
   const color_hex = colorInp ? colorInp.value : '#6366f1';
 
   if (!name) {
@@ -1190,7 +1203,7 @@ async function handleCreatePlayer(e) {
     const res = await fetch(getApiUrl('/api/players'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, nickname, color_hex })
+      body: JSON.stringify({ name, nickname, email, color_hex })
     });
 
     if (!res.ok) {
@@ -1213,6 +1226,7 @@ async function handleCreatePlayer(e) {
     // Reset inputs
     if (nameInp) nameInp.value = '';
     if (nickInp) nickInp.value = '';
+    if (emailInp) emailInp.value = '';
     if (fileInput) fileInput.value = '';
 
     showToast(`¡Jugador "${newPlayer.name}" registrado con éxito!`, 'success');
@@ -1224,6 +1238,92 @@ async function handleCreatePlayer(e) {
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.innerHTML = '<span>+</span> Guardar Jugador';
+    }
+  }
+}
+
+async function openEditPlayerModal(playerId) {
+  try {
+    const res = await fetch(getApiUrl(`/api/players/${playerId}`));
+    if (!res.ok) return;
+    const player = await res.json();
+
+    document.getElementById('edit-player-id').value = player.id;
+    document.getElementById('edit-player-name').value = player.name;
+    document.getElementById('edit-player-nickname').value = player.nickname || '';
+    document.getElementById('edit-player-email').value = player.email || '';
+    document.getElementById('edit-player-color').value = player.color_hex || '#6366f1';
+
+    const avatarPreview = document.getElementById('edit-player-avatar-preview');
+    if (player.avatar_url) {
+      avatarPreview.innerHTML = `<img src="${getApiUrl(player.avatar_url)}" class="w-full h-full rounded-2xl object-cover">`;
+      avatarPreview.style.backgroundColor = 'transparent';
+    } else {
+      avatarPreview.innerHTML = player.name.substring(0, 2).toUpperCase();
+      avatarPreview.style.backgroundColor = player.color_hex || '#6366f1';
+    }
+
+    const fileInp = document.getElementById('edit-player-avatar-file');
+    if (fileInp) fileInp.value = '';
+
+    openModal('modal-edit-player');
+  } catch (err) {
+    showToast('Error al cargar datos del jugador', 'error');
+  }
+}
+
+async function handleUpdatePlayer(e) {
+  e.preventDefault();
+  const playerId = document.getElementById('edit-player-id').value;
+  const name = document.getElementById('edit-player-name').value.trim();
+  const nickname = document.getElementById('edit-player-nickname').value.trim();
+  const email = document.getElementById('edit-player-email').value.trim();
+  const color_hex = document.getElementById('edit-player-color').value;
+  const fileInput = document.getElementById('edit-player-avatar-file');
+  const submitBtn = document.getElementById('btn-update-player');
+
+  if (!name) {
+    showToast('El nombre del jugador es requerido', 'error');
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando cambios...';
+  }
+
+  try {
+    const res = await fetch(getApiUrl(`/api/players/${playerId}`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, nickname, email, color_hex })
+    });
+
+    if (!res.ok) {
+      showToast('Error al actualizar jugador', 'error');
+      return;
+    }
+
+    // If new avatar file uploaded
+    if (fileInput && fileInput.files.length > 0) {
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      await fetch(getApiUrl(`/api/players/${playerId}/avatar`), {
+        method: 'POST',
+        body: formData
+      });
+    }
+
+    closeModal('modal-edit-player');
+    showToast('Perfil de jugador actualizado con éxito', 'success');
+    cachedPlayers = [];
+    await loadPlayers();
+  } catch (err) {
+    showToast('Error de conexión al actualizar jugador', 'error');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Guardar Cambios';
     }
   }
 }

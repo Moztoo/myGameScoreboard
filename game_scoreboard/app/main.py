@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Game Scoreboard Add-on",
     description="Scoreboard nativo de videojuegos para Home Assistant",
-    version="1.0.5",
+    version="1.0.6",
     lifespan=lifespan
 )
 

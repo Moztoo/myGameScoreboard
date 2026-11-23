@@ -55,6 +55,7 @@ class GameUpdate(BaseModel):
 class PlayerBase(BaseModel):
     name: str
     nickname: Optional[str] = None
+    email: Optional[str] = None
     color_hex: Optional[str] = "#3b82f6"
 
 
@@ -65,6 +66,7 @@ class PlayerCreate(PlayerBase):
 class PlayerUpdate(BaseModel):
     name: Optional[str] = None
     nickname: Optional[str] = None
+    email: Optional[str] = None
     color_hex: Optional[str] = None
 
 

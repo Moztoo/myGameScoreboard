@@ -53,6 +53,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         nickname TEXT,
+        email TEXT,
         avatar_url TEXT,
         color_hex TEXT DEFAULT '#3b82f6',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -133,6 +134,13 @@ def init_db():
                     json.dumps(g.get("player_metrics", []))
                 ))
             conn.commit()
+
+    # Migration: Ensure email column exists in players table
+    try:
+        cursor.execute("ALTER TABLE players ADD COLUMN email TEXT")
+        conn.commit()
+    except Exception:
+        pass
 
     # Auto-fix rank positions for any existing Mario Kart matches (highest score = 1st rank)
     try:

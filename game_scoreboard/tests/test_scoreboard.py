@@ -66,10 +66,11 @@ def test_games_seeded_with_mario_kart_8():
 
 def test_player_creation_and_avatar_upload():
     """Verify player creation and photo avatar upload."""
-    # 1. Create player
+    # 1. Create player with email
     res = client.post("/api/players", json={
         "name": "Ricardo Mostalac",
         "nickname": "TARS",
+        "email": "ricardo@test.com",
         "color_hex": "#6366f1"
     })
     assert res.status_code == 200
@@ -77,6 +78,7 @@ def test_player_creation_and_avatar_upload():
     player_id = player["id"]
     assert player["name"] == "Ricardo Mostalac"
     assert player["nickname"] == "TARS"
+    assert player["email"] == "ricardo@test.com"
 
     # 2. Upload avatar
     fake_image_bytes = b"\xFF\xD8\xFF\xE0\x00\x10JFIF" + b"\x00" * 50
@@ -85,10 +87,25 @@ def test_player_creation_and_avatar_upload():
     assert avatar_res.status_code == 200
     assert "avatars/player_" in avatar_res.json()["avatar_url"]
 
-    # 3. Retrieve player and verify avatar URL
+    # 3. Retrieve player and verify avatar URL and email
     get_res = client.get(f"/api/players/{player_id}")
     assert get_res.status_code == 200
     assert get_res.json()["avatar_url"] == avatar_res.json()["avatar_url"]
+    assert get_res.json()["email"] == "ricardo@test.com"
+
+    # 4. Edit player profile (PUT /api/players/{player_id})
+    edit_res = client.put(f"/api/players/{player_id}", json={
+        "name": "Ricardo M.",
+        "nickname": "Mozto",
+        "email": "mozto@test.com",
+        "color_hex": "#ef4444"
+    })
+    assert edit_res.status_code == 200
+    updated = edit_res.json()
+    assert updated["name"] == "Ricardo M."
+    assert updated["nickname"] == "Mozto"
+    assert updated["email"] == "mozto@test.com"
+    assert updated["color_hex"] == "#ef4444"
 
 
 def test_session_and_practice_match_filter():
