@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Game Scoreboard Add-on",
     description="Scoreboard nativo de videojuegos para Home Assistant",
-    version="1.0.3",
+    version="1.0.4",
     lifespan=lifespan
 )
 
@@ -57,17 +57,24 @@ async def serve_avatar(filename: str):
     return HTMLResponse(status_code=404, content="Avatar not found")
 
 
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+
 # Serve static assets directly without Mount prefix collisions
 @app.get("/static/{file_path:path}")
 async def serve_static(file_path: str):
     target = STATIC_DIR / file_path
     if target.exists() and target.is_file():
-        # Set proper Content-Type
+        # Set proper Content-Type and disable aggressive client caching
         if file_path.endswith(".js"):
-            return FileResponse(str(target), media_type="application/javascript")
+            return FileResponse(str(target), media_type="application/javascript", headers=NO_CACHE_HEADERS)
         if file_path.endswith(".css"):
-            return FileResponse(str(target), media_type="text/css")
-        return FileResponse(str(target))
+            return FileResponse(str(target), media_type="text/css", headers=NO_CACHE_HEADERS)
+        return FileResponse(str(target), headers=NO_CACHE_HEADERS)
     return HTMLResponse(status_code=404, content="Static asset not found")
 
 
@@ -91,7 +98,7 @@ async def serve_spa_root(request: Request):
 
     content = content.replace("__INGRESS_PATH_PLACEHOLDER__", ingress_path)
     content = content.replace("__INGRESS_BASE_PLACEHOLDER__", ingress_base)
-    return HTMLResponse(content=content)
+    return HTMLResponse(content=content, headers=NO_CACHE_HEADERS)
 
 
 @app.get("/{full_path:path}", response_class=HTMLResponse)
