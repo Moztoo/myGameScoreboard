@@ -210,10 +210,18 @@ def init_db():
                 id, name, subject_template, banner_url, intro_text,
                 include_podium, include_standings, include_matches, include_metrics, footer_text
             ) VALUES
-            ('session_mario_kart', 'Reporte Mario Kart 8 Deluxe', '🏎️ Resultados Mario Kart 8: {{session_title}} 🏁', 'static/img/email_banner.jpg', '¡Aquí están los resultados oficiales de la noche de Mario Kart 8!', 1, 1, 1, 1, 'Game Scoreboard · Torneo de Amigos'),
+            ('session_mario_kart', 'Reporte Mario Kart 8 Deluxe', '🏎️ Resultados Mario Kart 8: {{session_title}} 🏁', 'static/img/banner_mario_kart.jpg', '¡Aquí están los resultados oficiales de la noche de Mario Kart 8!', 1, 1, 1, 1, 'Game Scoreboard · Torneo de Amigos'),
             ('session_generic', 'Reporte de Sesión General', '🏆 Resultados de Sesión: {{session_title}}', 'static/img/email_banner.jpg', 'Resumen general de las partidas y puntuaciones de la sesión.', 1, 1, 1, 1, 'Game Scoreboard · Home Assistant'),
             ('monthly_digest', 'Resumen Mensual de Campeonatos', '📅 Resumen Mensual: {{month}} - Estadísticas y Récords', 'static/img/email_banner.jpg', 'Aquí está el resumen del mes con las estadísticas acumuladas y el podio general.', 1, 1, 0, 0, 'Game Scoreboard · Resumen Mensual Automático'),
             ('global_leaderboard', 'Tabla de Posiciones Global', '🏅 Leaderboard Global Actualizado - Game Scoreboard', 'static/img/email_banner.jpg', 'Estado actual del campeonato y tabla de posiciones de todos los jugadores.', 1, 1, 0, 0, 'Game Scoreboard · Home Assistant')
+            """)
+            conn.commit()
+        else:
+            # Upgrade Mario Kart banner if still pointing to generic default
+            cursor.execute("""
+                UPDATE email_templates 
+                SET banner_url = 'static/img/banner_mario_kart.jpg' 
+                WHERE id = 'session_mario_kart' AND (banner_url IS NULL OR banner_url = 'static/img/email_banner.jpg')
             """)
             conn.commit()
 

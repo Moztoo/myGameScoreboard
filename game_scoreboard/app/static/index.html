@@ -16,7 +16,7 @@
     }
   </script>
   <!-- Local Critical CSS First -->
-  <link rel="stylesheet" href="static/css/styles.css?v=1.0.10">
+  <link rel="stylesheet" href="static/css/styles.css?v=1.0.11">
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -58,7 +58,7 @@
           <div>
             <div class="flex items-center gap-1.5">
               <span class="text-sm sm:text-base font-black tracking-tight text-white">Game Scoreboard</span>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.0.10</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.0.11</span>
             </div>
             <p class="text-[10px] sm:text-xs text-slate-400">Torneos y Partidas entre Amigos</p>
           </div>
@@ -856,8 +856,11 @@
 
         <div>
           <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Ruta o URL del Banner</label>
-          <input type="text" id="template-banner-url" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-          <span class="text-[10px] text-slate-500 mt-0.5 block">Por defecto: static/img/email_banner.jpg</span>
+          <input type="text" id="template-banner-url" oninput="updateTemplateBannerPreview(this.value)" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <div id="template-banner-preview-box" class="mt-2 w-full h-24 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 hidden">
+            <img id="template-banner-preview-img" src="" class="w-full h-full object-cover" alt="Vista previa del banner" onerror="document.getElementById('template-banner-preview-box').classList.add('hidden')">
+          </div>
+          <span class="text-[10px] text-slate-500 mt-1 block">Ejemplos: static/img/banner_mario_kart.jpg · static/img/email_banner.jpg</span>
         </div>
 
         <div>
@@ -902,6 +905,6 @@
   </div>
 
   <!-- JavaScript Code: loaded with relative path supported by <base> -->
-  <script src="static/js/app.js?v=1.0.10"></script>
+  <script src="static/js/app.js?v=1.0.11"></script>
 </body>
 </html>

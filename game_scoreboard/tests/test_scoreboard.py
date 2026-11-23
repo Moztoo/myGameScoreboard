@@ -11,7 +11,8 @@ TEST_DATA_DIR = Path(__file__).resolve().parent / "test_data"
 os.environ["DATA_DIR"] = str(TEST_DATA_DIR)
 
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
+APP_DIR = Path(__file__).resolve().parent.parent / "app"
+sys.path.insert(0, str(APP_DIR))
 
 from main import app
 from database import init_db, get_db_connection, DB_PATH, AVATARS_DIR
@@ -347,6 +348,13 @@ def test_email_settings_and_test_trigger():
     templates_res = client.get("/api/settings/templates")
     assert templates_res.status_code == 200
     assert len(templates_res.json()) >= 1
+    
+    # Verify Mario Kart banner template
+    mk_template = next((t for t in templates_res.json() if t["id"] == "session_mario_kart"), None)
+    assert mk_template is not None
+    assert mk_template["banner_url"] == "static/img/banner_mario_kart.jpg"
+    assert (APP_DIR / "static" / "img" / "banner_mario_kart.jpg").exists()
+
     t_id = templates_res.json()[0]["id"]
 
     edit_t = client.put(f"/api/settings/templates/{t_id}", json={

@@ -157,10 +157,11 @@ def send_mime_message(recipients: List[str], subject: str, html_body: str, plain
     img_to_attach = banner_file if (banner_file and banner_file.exists()) else (DEFAULT_BANNER_PATH if DEFAULT_BANNER_PATH.exists() else None)
     if img_to_attach and img_to_attach.exists():
         try:
+            subtype = "png" if img_to_attach.suffix.lower() == ".png" else "jpeg"
             with open(img_to_attach, "rb") as img_f:
-                img_part = MIMEImage(img_f.read(), _subtype="jpeg")
+                img_part = MIMEImage(img_f.read(), _subtype=subtype)
                 img_part.add_header("Content-ID", "<tournament_banner>")
-                img_part.add_header("Content-Disposition", "inline", filename="banner.jpg")
+                img_part.add_header("Content-Disposition", "inline", filename=img_to_attach.name)
                 msg_root.attach(img_part)
         except Exception as e:
             print(f"[EmailService] Could not attach banner: {e}")
@@ -209,7 +210,7 @@ def send_test_email(target_email: str, override_config: Optional[Dict[str, Any]]
       <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
         <tr>
           <td style="padding: 0; text-align: center; background-color: #090d16;">
-            <img src="cid:tournament_banner" alt="Game Scoreboard" style="width: 100%; max-width: 600px; height: auto; display: block;" />
+            <img src="cid:tournament_banner" alt="Game Scoreboard" width="600" style="width: 100%; max-width: 600px; height: auto; display: block; border-top-left-radius: 20px; border-top-right-radius: 20px; margin: 0 auto;" />
           </td>
         </tr>
         <tr>
@@ -516,7 +517,13 @@ def execute_automation(automation: Dict[str, Any], context: Optional[Dict[str, A
         plain_body = template.get('intro_text', 'Notificación de Game Scoreboard')
 
     # Banner path
-    banner_file = BASE_DIR / template.get("banner_url", "static/img/email_banner.jpg")
+    banner_rel = (template.get("banner_url") or "static/img/banner_mario_kart.jpg").lstrip("/")
+    banner_file = BASE_DIR / banner_rel
+    if not banner_file.exists():
+        if "mario" in str(template.get("id", "")).lower() and (BASE_DIR / "static/img/banner_mario_kart.jpg").exists():
+            banner_file = BASE_DIR / "static/img/banner_mario_kart.jpg"
+        else:
+            banner_file = DEFAULT_BANNER_PATH
 
     result = send_mime_message(
         recipients=recipients,
@@ -636,7 +643,7 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
       <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
         <tr>
           <td style="padding: 0; text-align: center; background-color: #090d16;">
-            <img src="cid:tournament_banner" alt="Game Scoreboard" style="width: 100%; max-width: 600px; height: auto; display: block;" />
+            <img src="cid:tournament_banner" alt="Game Scoreboard" width="600" style="width: 100%; max-width: 600px; height: auto; display: block; border-top-left-radius: 20px; border-top-right-radius: 20px; margin: 0 auto;" />
           </td>
         </tr>
         <tr>
@@ -723,7 +730,7 @@ def render_global_digest_email(template: Dict[str, Any], content_type: str) -> t
       <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
         <tr>
           <td style="padding: 0; text-align: center; background-color: #090d16;">
-            <img src="cid:tournament_banner" alt="Game Scoreboard" style="width: 100%; max-width: 600px; height: auto; display: block;" />
+            <img src="cid:tournament_banner" alt="Game Scoreboard" width="600" style="width: 100%; max-width: 600px; height: auto; display: block; border-top-left-radius: 20px; border-top-right-radius: 20px; margin: 0 auto;" />
           </td>
         </tr>
         <tr>

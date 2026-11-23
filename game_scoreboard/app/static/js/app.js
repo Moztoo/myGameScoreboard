@@ -1946,6 +1946,7 @@ async function loadTemplates() {
       return `
         <div class="p-4 sm:p-5 rounded-2xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between space-y-3 shadow-sm">
           <div class="space-y-2">
+            ${t.banner_url ? `<div class="w-full h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-800/80 mb-2"><img src="${t.banner_url}" class="w-full h-full object-cover" alt="Banner" onerror="this.parentElement.style.display='none'"></div>` : ''}
             <div class="flex items-center justify-between gap-2">
               <h3 class="font-bold text-white text-sm sm:text-base">${t.name}</h3>
               <span class="text-[10px] text-slate-500 font-mono">${t.id}</span>
@@ -1956,7 +1957,7 @@ async function loadTemplates() {
           </div>
 
           <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between">
-            <span class="text-[10px] text-slate-500">Banner: ${t.banner_url || 'Estándar'}</span>
+            <span class="text-[10px] text-slate-500 truncate max-w-[170px]" title="${t.banner_url || 'Estándar'}">Banner: ${t.banner_url || 'Estándar'}</span>
             <button onclick="openEditTemplateModal('${t.id}')" class="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition flex items-center gap-1">
               <span>✏️</span> Editar Plantilla
             </button>
@@ -1977,13 +1978,28 @@ function insertVariableToSubject(varName) {
   }
 }
 
+function updateTemplateBannerPreview(url) {
+  const box = document.getElementById('template-banner-preview-box');
+  const img = document.getElementById('template-banner-preview-img');
+  if (!box || !img) return;
+  const cleanUrl = (url || '').trim();
+  if (cleanUrl) {
+    img.src = cleanUrl;
+    box.classList.remove('hidden');
+  } else {
+    box.classList.add('hidden');
+  }
+}
+
 async function openEditTemplateModal(templateId) {
   const t = cachedTemplates.find(x => x.id === templateId);
   if (!t) return;
   document.getElementById('edit-template-id').value = t.id;
   document.getElementById('template-name').value = t.name;
   document.getElementById('template-subject').value = t.subject_template;
-  document.getElementById('template-banner-url').value = t.banner_url || 'static/img/email_banner.jpg';
+  const bannerUrl = t.banner_url || 'static/img/banner_mario_kart.jpg';
+  document.getElementById('template-banner-url').value = bannerUrl;
+  updateTemplateBannerPreview(bannerUrl);
   document.getElementById('template-intro').value = t.intro_text || '';
   document.getElementById('template-include-podium').checked = Boolean(t.include_podium);
   document.getElementById('template-include-standings').checked = Boolean(t.include_standings);
