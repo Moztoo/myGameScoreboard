@@ -1,0 +1,104 @@
+import os
+from pathlib import Path
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from contextlib import asynccontextmanager
+from database import init_db, AVATARS_DIR
+from routers import games, players, sessions, stats, backup
+
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+INDEX_HTML = STATIC_DIR / "index.html"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Game Scoreboard Add-on",
+    description="Scoreboard nativo de videojuegos para Home Assistant",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS middleware for development flexibility
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class IngressMiddleware(BaseHTTPMiddleware):
+    """Detects Home Assistant Ingress header (X-Ingress-Path) and adjusts request root_path."""
+    async def dispatch(self, request: Request, call_next):
+        ingress_path = request.headers.get("X-Ingress-Path", "")
+        if ingress_path:
+            request.scope["root_path"] = ingress_path
+        response = await call_next(request)
+        return response
+
+
+app.add_middleware(IngressMiddleware)
+
+# Include Routers
+app.include_router(games.router)
+app.include_router(players.router)
+app.include_router(sessions.router)
+app.include_router(stats.router)
+app.include_router(backup.router)
+
+# Ensure avatar and static directories
+AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# Serve avatars
+@app.get("/avatars/{filename}")
+async def serve_avatar(filename: str):
+    file_path = AVATARS_DIR / filename
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(str(file_path))
+    # Return placeholder or 404
+    return HTMLResponse(status_code=404, content="Avatar not found")
+
+
+# Mount static assets
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_spa_root(request: Request):
+    """Serve the single page application, injecting the dynamic Ingress path."""
+    ingress_path = request.headers.get("X-Ingress-Path", "")
+    if not INDEX_HTML.exists():
+        return HTMLResponse(
+            "<h1>Game Scoreboard Backend Running</h1><p>Frontend assets are being prepared.</p>"
+        )
+
+    with open(INDEX_HTML, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Dynamic replacement of ingress path base
+    content = content.replace("__INGRESS_PATH_PLACEHOLDER__", ingress_path)
+    return HTMLResponse(content=content)
+
+
+@app.get("/{full_path:path}", response_class=HTMLResponse)
+async def catch_all_spa(request: Request, full_path: str):
+    """Catch-all for SPA navigation."""
+    if full_path.startswith("api/") or full_path.startswith("static/") or full_path.startswith("avatars/"):
+        return HTMLResponse(status_code=404, content="Not found")
+    return await serve_spa_root(request)

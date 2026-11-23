@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Scoreboard</title>
+  <!-- Ingress dynamic base path -->
+  <script>
+    window.__INGRESS_PATH__ = "__INGRESS_PATH_PLACEHOLDER__";
+    if (window.__INGRESS_PATH__ === "__INGRESS_PATH_PLACEHOLDER__") {
+      window.__INGRESS_PATH__ = "";
+    }
+  </script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#1e1b4b',
+            },
+            surface: {
+              900: '#0f172a',
+              800: '#1e293b',
+              700: '#334155',
+              600: '#475569'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="static/css/styles.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-amber-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <span class="text-xl">🎮</span>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+              Game Scoreboard
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">HA Native</span>
+            </h1>
+            <p class="text-xs text-slate-400">Torneos y Partidas con Amigos</p>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="flex space-x-1 sm:space-x-2 bg-slate-950/60 p-1.5 rounded-xl border border-slate-800/80">
+          <button id="nav-dashboard" onclick="switchTab('dashboard')" class="nav-tab px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 text-indigo-400 bg-slate-800 shadow">
+            <span>📊</span> Dashboard
+          </button>
+          <button id="nav-sessions" onclick="switchTab('sessions')" class="nav-tab px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200">
+            <span>⚔️</span> Sesiones
+          </button>
+          <button id="nav-players" onclick="switchTab('players')" class="nav-tab px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200">
+            <span>👥</span> Jugadores
+          </button>
+          <button id="nav-games" onclick="switchTab('games')" class="nav-tab px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200">
+            <span>⚙️</span> Juegos
+          </button>
+          <button id="nav-backup" onclick="switchTab('backup')" class="nav-tab px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200">
+            <span>💾</span> Respaldo
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ===================================================================== -->
+    <!-- TAB: DASHBOARD                                                        -->
+    <!-- ===================================================================== -->
+    <section id="tab-dashboard" class="space-y-6">
+      <!-- Filter and Header Bar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+        <div class="flex items-center space-x-3">
+          <label for="dash-game-filter" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Juego:</label>
+          <select id="dash-game-filter" onchange="loadDashboard()" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="">Todos los Videojuegos</option>
+          </select>
+        </div>
+
+        <div class="flex items-center space-x-3">
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="dash-practice-toggle" onchange="loadDashboard()" class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+            <span class="ml-3 text-xs font-medium text-slate-300">Incluir partidas de práctica</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Overview KPI Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="dash-kpis">
+        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+          <div class="text-xs text-slate-400 uppercase font-semibold">Total Partidas</div>
+          <div class="text-2xl font-black text-white mt-1" id="kpi-matches">0</div>
+          <div class="text-[11px] text-slate-500 mt-1" id="kpi-practice-sub">0 competitivas · 0 práctica</div>
+        </div>
+        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+          <div class="text-xs text-slate-400 uppercase font-semibold">Jugadores Activos</div>
+          <div class="text-2xl font-black text-indigo-400 mt-1" id="kpi-players">0</div>
+          <div class="text-[11px] text-slate-500 mt-1">Registrados en la comunidad</div>
+        </div>
+        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+          <div class="text-xs text-slate-400 uppercase font-semibold">Sesiones Activas</div>
+          <div class="text-2xl font-black text-emerald-400 mt-1" id="kpi-sessions">0</div>
+          <div class="text-[11px] text-slate-500 mt-1">En curso ahora mismo</div>
+        </div>
+        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+          <div class="text-xs text-slate-400 uppercase font-semibold">Juego Más Jugado</div>
+          <div class="text-lg font-bold text-amber-400 mt-1 truncate" id="kpi-top-game">-</div>
+          <div class="text-[11px] text-slate-500 mt-1">Mayor cantidad de matches</div>
+        </div>
+      </div>
+
+      <!-- Podium Top 3 -->
+      <div id="dash-podium-container" class="hidden">
+        <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+          <span>🏆</span> Podio de Campeones
+        </h3>
+        <div class="grid grid-cols-3 gap-3 md:gap-6 items-end max-w-2xl mx-auto pt-6 pb-2" id="dash-podium">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Leaderboard Table -->
+      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 overflow-hidden shadow-lg">
+        <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span>🎖️</span> Tabla General de Posiciones (Leaderboard)
+          </h2>
+          <span class="text-xs text-slate-400" id="dash-practice-indicator">Modo Competitivo (Excluye Práctica)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-950/60 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-4 w-12 text-center">#</th>
+                <th class="py-3 px-4">Jugador</th>
+                <th class="py-3 px-4 text-center">Partidas</th>
+                <th class="py-3 px-4 text-center">Victorias 🥇</th>
+                <th class="py-3 px-4 text-center">Tasa Win %</th>
+                <th class="py-3 px-4 text-center">Podios 🏆</th>
+                <th class="py-3 px-4 text-right">Puntos Totales</th>
+                <th class="py-3 px-4 text-right">Promedio Pts</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboard-body" class="divide-y divide-slate-800/60 font-medium">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Matches Timeline -->
+      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 p-5">
+        <h2 class="text-base font-bold text-white mb-4 flex items-center gap-2">
+          <span>⏱️</span> Partidas Recientes
+        </h2>
+        <div id="recent-matches-list" class="space-y-3">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ===================================================================== -->
+    <!-- TAB: SESSIONS (LIVE MATCH TRACKER)                                    -->
+    <!-- ===================================================================== -->
+    <section id="tab-sessions" class="hidden space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-black text-white flex items-center gap-2">
+            <span>⚔️</span> Sesiones de Juego
+          </h2>
+          <p class="text-xs text-slate-400">Crea una sesión para una noche de juegos y anota cada partida en tiempo real.</p>
+        </div>
+        <button onclick="openNewSessionModal()" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/30 transition">
+          <span>+</span> Iniciar Nueva Sesión
+        </button>
+      </div>
+
+      <!-- Active / Selected Session View -->
+      <div id="session-detail-view" class="hidden space-y-6">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Sessions List -->
+      <div id="sessions-list-container" class="space-y-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Historial de Sesiones</h3>
+        <div id="sessions-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ===================================================================== -->
+    <!-- TAB: PLAYERS                                                          -->
+    <!-- ===================================================================== -->
+    <section id="tab-players" class="hidden space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-black text-white flex items-center gap-2">
+            <span>👥</span> Roster de Jugadores
+          </h2>
+          <p class="text-xs text-slate-400">Registra a tus amigos con sus apodos, fotos y colores característicos.</p>
+        </div>
+        <button onclick="openNewPlayerModal()" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/30 transition">
+          <span>+</span> Dar de Alta Jugador
+        </button>
+      </div>
+
+      <div id="players-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+
+    <!-- ===================================================================== -->
+    <!-- TAB: GAMES CONFIGURATION                                              -->
+    <!-- ===================================================================== -->
+    <section id="tab-games" class="hidden space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-black text-white flex items-center gap-2">
+            <span>⚙️</span> Catálogo de Videojuegos y Reglas
+          </h2>
+          <p class="text-xs text-slate-400">Configura qué juegos juegan, los modos de carrera o combate y qué campos se registran.</p>
+        </div>
+        <button onclick="openNewGameModal()" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/30 transition">
+          <span>+</span> Agregar Videojuego
+        </button>
+      </div>
+
+      <div id="games-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+
+    <!-- ===================================================================== -->
+    <!-- TAB: BACKUP & EXPORT/IMPORT                                           -->
+    <!-- ===================================================================== -->
+    <section id="tab-backup" class="hidden space-y-6 max-w-3xl mx-auto">
+      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-6">
+        <div>
+          <h2 class="text-xl font-black text-white flex items-center gap-2">
+            <span>💾</span> Exportar y Respaldar Información
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Descarga un respaldo comprimido `.ZIP` con toda la base de datos (sesiones, partidas, jugadores, puntos) y las fotos de los avatares para moverlo a otra instancia de Home Assistant o respaldarlo en tu PC.
+          </p>
+        </div>
+
+        <div class="p-5 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div class="font-bold text-white text-sm">Exportar Respaldo Completo</div>
+            <div class="text-xs text-slate-400">Genera un archivo ZIP con base de datos SQLite y avatares.</div>
+          </div>
+          <button onclick="downloadBackup()" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2">
+            <span>⬇️</span> Descargar ZIP
+          </button>
+        </div>
+
+        <hr class="border-slate-800">
+
+        <div>
+          <h3 class="text-sm font-bold text-white mb-2">Restaurar Respaldo en Esta Instancia</h3>
+          <p class="text-xs text-slate-400 mb-4">
+            Sube un archivo `.ZIP` exportado previamente. <span class="text-amber-400 font-medium">Nota:</span> Esto reemplazará los datos actuales con la información del respaldo.
+          </p>
+
+          <form id="import-form" onsubmit="handleImportBackup(event)" class="space-y-4">
+            <div class="flex items-center justify-center w-full">
+              <label for="import-file" class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-700 border-dashed rounded-xl cursor-pointer bg-slate-950/40 hover:bg-slate-950/70 transition">
+                <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                  <span class="text-2xl mb-1">📦</span>
+                  <p class="text-xs text-slate-300 font-medium"><span class="font-semibold text-indigo-400">Haz clic para seleccionar</span> o arrastra el archivo ZIP</p>
+                  <p class="text-[11px] text-slate-500 mt-1" id="import-file-name">scoreboard_backup_*.zip</p>
+                </div>
+                <input id="import-file" type="file" accept=".zip" class="hidden" onchange="updateImportFileName(this)">
+              </label>
+            </div>
+            <button type="submit" id="btn-import-submit" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/20 transition disabled:opacity-50">
+              Restaurar Respaldo Ahora
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: NUEVA SESIÓN                                                  -->
+  <!-- ===================================================================== -->
+  <div id="modal-session" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <span>⚔️</span> Iniciar Nueva Sesión
+        </h3>
+        <button onclick="closeModal('modal-session')" class="text-slate-400 hover:text-white text-xl">&times;</button>
+      </div>
+
+      <form id="form-new-session" onsubmit="handleCreateSession(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Videojuego</label>
+          <select id="session-game-select" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <!-- Loaded dynamically -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Nombre / Título de la Sesión</label>
+          <input type="text" id="session-title" placeholder="ej. Viernes de Mario Kart con amigos" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Jugadores Participantes</label>
+          <div id="session-players-checkboxes" class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-slate-950/50 rounded-xl border border-slate-800">
+            <!-- Checkboxes loaded dynamically -->
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Notas Opcionales</label>
+          <input type="text" id="session-notes" placeholder="ej. Torneo de fin de semana en casa de Ricardo" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2">
+          <button type="button" onclick="closeModal('modal-session')" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/30">Crear Sesión</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: REGISTRAR PARTIDA (MATCH RECORDER)                             -->
+  <!-- ===================================================================== -->
+  <div id="modal-match" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <span>🏁</span> Registrar Resultado de Partida
+          </h3>
+          <p class="text-xs text-slate-400" id="match-modal-subtitle">Configura los parámetros de la partida y asigna puntos.</p>
+        </div>
+        <button onclick="closeModal('modal-match')" class="text-slate-400 hover:text-white text-xl">&times;</button>
+      </div>
+
+      <form id="form-new-match" onsubmit="handleCreateMatch(event)" class="space-y-5">
+        <!-- Match Type & Practice Flag -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Tipo de Partida</label>
+            <select id="match-type-select" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <!-- Loaded dynamically from game options -->
+            </select>
+          </div>
+
+          <div class="flex items-center pt-5">
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="match-is-practice" class="sr-only peer">
+              <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+              <span class="ml-3 text-sm font-medium text-amber-400">¿Partida de Práctica?</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Dynamic Game Rules Selectors (e.g. Mario Kart 8 options from TV photo) -->
+        <div id="match-game-rules-section" class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+          <div class="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+            <span>🎛️</span> Parámetros de la Partida (Reglas de Juego)
+          </div>
+          <div id="match-dynamic-rules-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <!-- Dynamic dropdowns generated based on game rule_settings -->
+          </div>
+        </div>
+
+        <!-- Player Scores Table -->
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-2">Puntos y Posiciones de los Jugadores</label>
+          <div class="bg-slate-950/60 rounded-xl border border-slate-800 overflow-hidden">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-900 text-slate-400 uppercase border-b border-slate-800">
+                <tr>
+                  <th class="py-2.5 px-3">Jugador</th>
+                  <th class="py-2.5 px-3 w-24 text-center">Posición (Lugar)</th>
+                  <th class="py-2.5 px-3 w-28 text-center">Puntos Obtenidos</th>
+                  <th class="py-2.5 px-3" id="match-extra-metric-th">Personaje / Extra</th>
+                </tr>
+              </thead>
+              <tbody id="match-players-scores-body" class="divide-y divide-slate-800">
+                <!-- Loaded dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Notas de la Partida</label>
+          <input type="text" id="match-notes" placeholder="ej. Remontada épica con caparazón azul" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2">
+          <button type="button" onclick="closeModal('modal-match')" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/30">Guardar Partida</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: NUEVO JUGADOR CON FOTO                                         -->
+  <!-- ===================================================================== -->
+  <div id="modal-player" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <span>👤</span> Dar de Alta Jugador
+        </h3>
+        <button onclick="closeModal('modal-player')" class="text-slate-400 hover:text-white text-xl">&times;</button>
+      </div>
+
+      <form id="form-new-player" onsubmit="handleCreatePlayer(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Nombre Completo</label>
+          <input type="text" id="player-name" placeholder="ej. Ricardo" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Gamertag / Apodo</label>
+          <input type="text" id="player-nickname" placeholder="ej. TARS / DarkKnight" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Color Distintivo</label>
+          <div class="flex items-center space-x-3">
+            <input type="color" id="player-color" value="#3b82f6" class="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-0">
+            <span class="text-xs text-slate-400">Color característico para las gráficas y badges</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Foto o Avatar (Opcional)</label>
+          <input type="file" id="player-avatar-file" accept="image/*" class="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-indigo-400 hover:file:bg-slate-700">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2">
+          <button type="button" onclick="closeModal('modal-player')" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/30">Registrar Jugador</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: AGREGAR JUEGO                                                  -->
+  <!-- ===================================================================== -->
+  <div id="modal-game" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <span>🎮</span> Agregar Videojuego al Catálogo
+        </h3>
+        <button onclick="closeModal('modal-game')" class="text-slate-400 hover:text-white text-xl">&times;</button>
+      </div>
+
+      <form id="form-new-game" onsubmit="handleCreateGame(event)" class="space-y-4">
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-1">
+            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Icono / Emoji</label>
+            <input type="text" id="game-icon" value="🎮" required class="w-full text-center text-xl bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">ID Único (slug)</label>
+            <input type="text" id="game-id" placeholder="ej. goldeneye_007" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Nombre del Juego</label>
+          <input type="text" id="game-name" placeholder="ej. GoldenEye 007" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Sistema de Puntuación</label>
+          <select id="game-scoring-type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="points_high">Mayor puntuación gana (ej. Mario Kart, Halo)</option>
+            <option value="placement">Por posición / orden de llegada (1º, 2º, 3º)</option>
+            <option value="points_low">Menor puntuación gana (ej. Golf, Tiempos)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Modos de Partida (Separados por coma)</label>
+          <input type="text" id="game-match-types" placeholder="1v1, Todos contra todos, Por equipos" value="Partida Normal, Torneo" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2">
+          <button type="button" onclick="closeModal('modal-game')" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-lg shadow-indigo-600/30">Guardar Videojuego</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JavaScript Code -->
+  <script src="static/js/app.js"></script>
+</body>
+</html>
