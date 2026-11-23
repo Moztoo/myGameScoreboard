@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import List, Dict, Any, Optional
 import json
-from database import get_db_connection
+from database import get_db_connection, get_match_race_count
 from models import SessionCreate, SessionUpdate, MatchCreate
 from email_service import trigger_session_finished_automations
 
@@ -100,10 +100,13 @@ def get_session(session_id: int):
 
     matches = []
     # Player score aggregations for session standings
-    player_points = {p["id"]: {"total_score": 0.0, "wins": 0, "podiums": 0, "matches_played": 0} for p in players}
+    player_points = {p["id"]: {"total_score": 0.0, "wins": 0, "podiums": 0, "matches_played": 0, "races_played": 0} for p in players}
 
     for m in matches_rows:
         match_id = m["id"]
+        rule_values = json.loads(m["rule_values_json"] or "{}")
+        match_races = get_match_race_count(rule_values, m["match_type"])
+
         cursor.execute("""
         SELECT ms.*, p.name AS player_name, p.nickname AS player_nickname, p.avatar_url, p.color_hex
         FROM match_scores ms
@@ -136,6 +139,7 @@ def get_session(session_id: int):
             if p_id in player_points:
                 player_points[p_id]["total_score"] += score_val
                 player_points[p_id]["matches_played"] += 1
+                player_points[p_id]["races_played"] += match_races
                 if rank_val == 1:
                     player_points[p_id]["wins"] += 1
                 if rank_val <= 3:
@@ -146,7 +150,8 @@ def get_session(session_id: int):
             "session_id": m["session_id"],
             "match_number": m["match_number"],
             "match_type": m["match_type"],
-            "rule_values": json.loads(m["rule_values_json"] or "{}"),
+            "rule_values": rule_values,
+            "race_count": match_races,
             "is_practice": bool(m["is_practice"]),
             "notes": m["notes"] or "",
             "played_at": str(m["played_at"]),
@@ -157,7 +162,7 @@ def get_session(session_id: int):
     standings = []
     for p in players:
         p_id = p["id"]
-        stats = player_points.get(p_id, {"total_score": 0.0, "wins": 0, "podiums": 0, "matches_played": 0})
+        stats = player_points.get(p_id, {"total_score": 0.0, "wins": 0, "podiums": 0, "matches_played": 0, "races_played": 0})
         standings.append({
             "player_id": p_id,
             "name": p["name"],
@@ -167,7 +172,8 @@ def get_session(session_id: int):
             "total_score": stats["total_score"],
             "wins": stats["wins"],
             "podiums": stats["podiums"],
-            "matches_played": stats["matches_played"]
+            "matches_played": stats["matches_played"],
+            "races_played": stats["races_played"]
         })
 
     # Sort standings depending on scoring_type
@@ -192,7 +198,8 @@ def get_session(session_id: int):
         "notes": session["notes"] or "",
         "players": players,
         "matches": matches,
-        "standings": standings
+        "standings": standings,
+        "total_races": sum(m.get("race_count", 1) for m in matches)
     }
 
 

@@ -1,7 +1,8 @@
 import json
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any, Optional
-from database import get_db_connection
+from database import get_db_connection, get_match_race_count
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
@@ -26,6 +27,20 @@ def get_overview():
     cursor.execute("SELECT COUNT(*) AS cnt FROM matches WHERE is_practice = 0")
     competitive_matches = cursor.fetchone()["cnt"]
 
+    # Calculate total and monthly races
+    cursor.execute("SELECT rule_values_json, match_type FROM matches WHERE is_practice = 0")
+    all_comp_matches = cursor.fetchall()
+    total_races = sum(get_match_race_count(r["rule_values_json"], r["match_type"]) for r in all_comp_matches)
+
+    current_month_str = datetime.now().strftime("%Y-%m")
+    cursor.execute("""
+    SELECT rule_values_json, match_type 
+    FROM matches 
+    WHERE is_practice = 0 AND strftime('%Y-%m', played_at) = ?
+    """, (current_month_str,))
+    month_matches = cursor.fetchall()
+    monthly_races = sum(get_match_race_count(r["rule_values_json"], r["match_type"]) for r in month_matches)
+
     # Most played game
     cursor.execute("""
     SELECT g.name, COUNT(m.id) AS match_count
@@ -47,12 +62,14 @@ def get_overview():
         "total_matches": total_matches,
         "competitive_matches": competitive_matches,
         "practice_matches": total_matches - competitive_matches,
+        "total_races": total_races,
+        "monthly_races": monthly_races,
         "top_game": top_game
     }
 
 
 @router.get("/leaderboard")
-def get_leaderboard(game_id: Optional[str] = None, include_practice: bool = False):
+def get_leaderboard(game_id: Optional[str] = None, include_practice: bool = False, month: Optional[str] = None):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -80,6 +97,9 @@ def get_leaderboard(game_id: Optional[str] = None, include_practice: bool = Fals
     if game_id:
         query += " AND s.game_id = ?"
         params.append(game_id)
+    if month:
+        query += " AND strftime('%Y-%m', m.played_at) = ?"
+        params.append(month)
 
     query += """
     GROUP BY p.id
@@ -87,6 +107,37 @@ def get_leaderboard(game_id: Optional[str] = None, include_practice: bool = Fals
     """
     cursor.execute(query, params)
     rows = cursor.fetchall()
+
+    # Calculate races per player (total and monthly)
+    race_query = """
+    SELECT ms.player_id, m.rule_values_json, m.match_type, m.played_at
+    FROM match_scores ms
+    JOIN matches m ON ms.match_id = m.id
+    JOIN sessions s ON m.session_id = s.id
+    WHERE 1=1
+    """
+    race_params = []
+    if not include_practice:
+        race_query += " AND m.is_practice = 0"
+    if game_id:
+        race_query += " AND s.game_id = ?"
+        race_params.append(game_id)
+    if month:
+        race_query += " AND strftime('%Y-%m', m.played_at) = ?"
+        race_params.append(month)
+
+    cursor.execute(race_query, race_params)
+    player_races = {}
+    player_monthly_races = {}
+    current_month_str = datetime.now().strftime("%Y-%m")
+
+    for r_row in cursor.fetchall():
+        pid = r_row["player_id"]
+        rc = get_match_race_count(r_row["rule_values_json"], r_row["match_type"])
+        player_races[pid] = player_races.get(pid, 0) + rc
+        if str(r_row["played_at"] or "")[:7] == current_month_str:
+            player_monthly_races[pid] = player_monthly_races.get(pid, 0) + rc
+
     conn.close()
 
     result = []
@@ -102,6 +153,8 @@ def get_leaderboard(game_id: Optional[str] = None, include_practice: bool = Fals
             "avatar_url": r["avatar_url"],
             "color_hex": r["color_hex"] or "#3b82f6",
             "matches_played": played,
+            "races_played": player_races.get(r["player_id"], 0),
+            "monthly_races": player_monthly_races.get(r["player_id"], 0),
             "wins": wins,
             "podiums": r["podiums"] or 0,
             "win_rate": win_rate,
@@ -206,11 +259,16 @@ def get_timeline(game_id: Optional[str] = None, include_practice: bool = False, 
 
     timeline_points = []
     player_cum_scores = {p_id: 0.0 for p_id in players_map}
+    player_cum_races = {p_id: 0 for p_id in players_map}
     character_counter = {}
     record_score = {"player_name": None, "player_nickname": None, "score": 0.0, "match_title": None, "date": None, "character": None}
+    total_races_timeline = 0
 
     for idx, m in enumerate(matches_rows, start=1):
         m_id = m["match_id"]
+        match_races = get_match_race_count(m["rule_values_json"], m["match_type"])
+        total_races_timeline += match_races
+
         cursor.execute("""
         SELECT ms.*, p.name AS player_name, p.nickname AS player_nickname, p.color_hex
         FROM match_scores ms
@@ -230,10 +288,12 @@ def get_timeline(game_id: Optional[str] = None, include_practice: bool = False, 
             kart_name = metrics.get("kart")
 
             player_cum_scores[p_id] = round(player_cum_scores[p_id] + sc_val, 1)
+            player_cum_races[p_id] = player_cum_races.get(p_id, 0) + match_races
 
             scores_by_player[str(p_id)] = {
                 "score": sc_val,
                 "cumulative_score": player_cum_scores[p_id],
+                "races_played": player_cum_races[p_id],
                 "rank": rank_val,
                 "character": char_name,
                 "kart": kart_name
@@ -269,6 +329,7 @@ def get_timeline(game_id: Optional[str] = None, include_practice: bool = False, 
             "game_name": m["game_name"],
             "date": date_str,
             "label": f"#{m['match_number']} ({date_str[5:] if len(date_str) >= 5 else date_str})",
+            "race_count": match_races,
             "scores": scores_by_player
         })
 
@@ -293,5 +354,7 @@ def get_timeline(game_id: Optional[str] = None, include_practice: bool = False, 
         "players": players_map,
         "record_score": record_score if record_score["score"] > 0 else None,
         "character_stats": char_stats,
-        "total_matches": len(timeline_points)
+        "total_matches": len(timeline_points),
+        "total_races": total_races_timeline,
+        "player_races": player_cum_races
     }

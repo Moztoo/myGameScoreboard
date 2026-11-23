@@ -636,6 +636,8 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
     podium_html = ""
 
     standings = session.get("standings", [])
+    total_session_races = session.get("total_races") or sum(m.get("race_count", 1) for m in session.get("matches", []))
+
     if template.get("include_podium") and len(standings) > 0:
         first = standings[0] if len(standings) > 0 else None
         second = standings[1] if len(standings) > 1 else None
@@ -651,13 +653,13 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
           <table border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
               <td style="width: 33%; text-align: center; vertical-align: bottom; padding: 8px;">
-                {f'<div style="font-size: 20px;">🥈</div><strong style="color: #cbd5e1; font-size: 13px; display: block;">{second["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{p2_score} pts</span>' if second else ''}
+                {f'<div style="font-size: 20px;">🥈</div><strong style="color: #cbd5e1; font-size: 13px; display: block;">{second["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{p2_score} pts ({second.get("races_played", second["matches_played"])} carr.)</span>' if second else ''}
               </td>
               <td style="width: 34%; text-align: center; vertical-align: bottom; padding: 8px; border-left: 1px solid #1e293b; border-right: 1px solid #1e293b;">
-                {f'<div style="font-size: 28px;">🥇</div><strong style="color: #fbbf24; font-size: 15px; display: block;">{first["name"]}</strong><span style="color: #fde68a; font-size: 12px; font-weight: bold;">{p1_score} pts ({first["wins"]} vic.)</span>' if first else ''}
+                {f'<div style="font-size: 28px;">🥇</div><strong style="color: #fbbf24; font-size: 15px; display: block;">{first["name"]}</strong><span style="color: #fde68a; font-size: 12px; font-weight: bold;">{p1_score} pts ({first["wins"]} vic · {first.get("races_played", first["matches_played"])} carr.)</span>' if first else ''}
               </td>
               <td style="width: 33%; text-align: center; vertical-align: bottom; padding: 8px;">
-                {f'<div style="font-size: 20px;">🥉</div><strong style="color: #d97706; font-size: 13px; display: block;">{third["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{p3_score} pts</span>' if third else ''}
+                {f'<div style="font-size: 20px;">🥉</div><strong style="color: #d97706; font-size: 13px; display: block;">{third["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{p3_score} pts ({third.get("races_played", third["matches_played"])} carr.)</span>' if third else ''}
               </td>
             </tr>
           </table>
@@ -668,15 +670,17 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
         for idx, st in enumerate(standings, start=1):
             medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}º"))
             st_score = int(st["total_score"]) if st["total_score"] == int(st["total_score"]) else st["total_score"]
+            races_val = st.get("races_played", st.get("matches_played", 0))
             standings_rows += f"""
             <tr style="border-bottom: 1px solid #1e293b;">
-              <td style="padding: 10px 12px; font-weight: bold; font-size: 14px; text-align: center; color: #fbbf24;">{medal}</td>
-              <td style="padding: 10px 12px;">
+              <td style="padding: 10px 10px; font-weight: bold; font-size: 14px; text-align: center; color: #fbbf24;">{medal}</td>
+              <td style="padding: 10px 10px;">
                 <strong style="color: #ffffff; font-size: 13px;">{st['name']}</strong>
                 <span style="color: #818cf8; font-size: 11px; margin-left: 4px;">@{st.get('nickname') or ''}</span>
               </td>
-              <td style="padding: 10px 12px; text-align: center; color: #10b981; font-weight: bold;">{st['wins']}</td>
-              <td style="padding: 10px 12px; text-align: center; color: #94a3b8;">{st['matches_played']}</td>
+              <td style="padding: 10px 8px; text-align: center; color: #10b981; font-weight: bold;">{st['wins']}</td>
+              <td style="padding: 10px 8px; text-align: center; color: #94a3b8;">{st['matches_played']}</td>
+              <td style="padding: 10px 8px; text-align: center; color: #38bdf8; font-weight: bold;">{races_val}</td>
               <td style="padding: 10px 12px; text-align: right; color: #fbbf24; font-weight: 800; font-size: 15px;">{st_score} pts</td>
             </tr>
             """
@@ -687,6 +691,7 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
             is_practice = bool(m.get("is_practice"))
             type_badge = "Práctica" if is_practice else "Oficial"
             badge_style = "background-color: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24;" if is_practice else "background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399;"
+            m_races = m.get("race_count") or (int(re.search(r'\d+', str(m.get("rule_values", {}).get("carreras", "1"))).group(0)) if re.search(r'\d+', str(m.get("rule_values", {}).get("carreras", "1"))) else 1)
 
             # Visual chips for rules
             rule_chips = []
@@ -742,6 +747,7 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
                   <td style="padding: 10px 14px;">
                     <span style="color: #ffffff; font-weight: 800; font-size: 13px;">🏁 Partida #{m['match_number']}</span>
                     <span style="color: #818cf8; font-size: 11px; margin-left: 6px;">({m.get('match_type', 'Partida')})</span>
+                    <span style="color: #38bdf8; font-size: 11px; margin-left: 6px; font-weight: 600;">· {m_races} carreras</span>
                   </td>
                   <td style="padding: 10px 14px; text-align: right;">
                     <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700; text-transform: uppercase; {badge_style}">
@@ -781,6 +787,9 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
             <h1 style="color: #ffffff; font-size: 22px; font-weight: 800; margin: 0 0 6px 0;">
               {session['title']}
             </h1>
+            <div style="display: inline-block; background-color: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 4px 10px; margin-bottom: 14px; font-size: 11px; color: #38bdf8; font-weight: 600;">
+              🏁 {total_session_races} carreras disputadas en la sesión
+            </div>
             <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin: 0 0 18px 0;">
               {template.get('intro_text', 'Resultados oficiales de la sesión:')}
             </p>
@@ -793,10 +802,11 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
               <table border="0" cellpadding="0" cellspacing="0" width="100%">
                 <thead>
                   <tr style="border-bottom: 1px solid #1e293b; color: #64748b; font-size: 11px; text-transform: uppercase;">
-                    <th style="padding: 6px 12px; text-align: center; width: 40px;">Pos</th>
-                    <th style="padding: 6px 12px; text-align: left;">Jugador</th>
-                    <th style="padding: 6px 12px; text-align: center;">Vic</th>
-                    <th style="padding: 6px 12px; text-align: center;">Partidas</th>
+                    <th style="padding: 6px 10px; text-align: center; width: 36px;">Pos</th>
+                    <th style="padding: 6px 10px; text-align: left;">Jugador</th>
+                    <th style="padding: 6px 8px; text-align: center;">Vic</th>
+                    <th style="padding: 6px 8px; text-align: center;">Partidas</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #38bdf8;">Carreras</th>
                     <th style="padding: 6px 12px; text-align: right;">Puntos</th>
                   </tr>
                 </thead>
@@ -822,7 +832,7 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
     </html>
     """
 
-    plain = f"Resultados de Sesión: {session['title']}\n" + "\n".join([f"{st['name']}: {st['total_score']} pts ({st['wins']} vic)" for st in standings])
+    plain = f"Resultados de Sesión: {session['title']} ({total_session_races} carreras disputadas)\n" + "\n".join([f"{st['name']}: {st['total_score']} pts ({st['wins']} vic · {st.get('races_played', st['matches_played'])} carreras)" for st in standings])
     return html, plain
 
 
@@ -1024,15 +1034,18 @@ def render_monthly_mario_kart_email(template: Dict[str, Any], month: Optional[st
     # 1. KPIs
     top_winner = lb[0] if lb else None
     top_char = char_stats[0] if char_stats else None
+    monthly_races = timeline_data.get("total_races", 0)
+    all_time_races = sum(p.get("races_played", 0) for p in lb)
 
     kpis_html = f"""
     <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; margin-bottom: 20px;">
       <table border="0" cellpadding="0" cellspacing="0" width="100%">
         <tr>
           <td style="width: 25%; text-align: center; padding: 6px; border-right: 1px solid #1e293b;">
-            <div style="color: #64748b; font-size: 10px; text-transform: uppercase; font-weight: bold;">🏁 Carreras</div>
-            <div style="color: #ffffff; font-size: 18px; font-weight: 800; margin-top: 2px;">{total_matches}</div>
-            <div style="color: #10b981; font-size: 10px;">Partidas del mes</div>
+            <div style="color: #64748b; font-size: 10px; text-transform: uppercase; font-weight: bold;">🏁 Carreras Mes</div>
+            <div style="color: #ffffff; font-size: 18px; font-weight: 800; margin-top: 2px;">{monthly_races}</div>
+            <div style="color: #38bdf8; font-size: 10px; font-weight: 600;">{total_matches} partidas</div>
+            <div style="color: #64748b; font-size: 9px; margin-top: 1px;">{all_time_races} carr. históricas</div>
           </td>
           <td style="width: 25%; text-align: center; padding: 6px; border-right: 1px solid #1e293b;">
             <div style="color: #64748b; font-size: 10px; text-transform: uppercase; font-weight: bold;">🏆 Líder</div>
@@ -1066,13 +1079,13 @@ def render_monthly_mario_kart_email(template: Dict[str, Any], month: Optional[st
           <table border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
               <td style="width: 33%; text-align: center; vertical-align: bottom; padding: 8px;">
-                {f'<div style="font-size: 20px;">🥈</div><strong style="color: #cbd5e1; font-size: 13px; display: block;">{p2["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{int(p2["total_score"])} pts ({p2["wins"]} vic)</span>' if p2 else ''}
+                {f'<div style="font-size: 20px;">🥈</div><strong style="color: #cbd5e1; font-size: 13px; display: block;">{p2["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{int(p2["total_score"])} pts ({p2.get("monthly_races", p2["matches_played"])} carr.)</span>' if p2 else ''}
               </td>
               <td style="width: 34%; text-align: center; vertical-align: bottom; padding: 8px; border-left: 1px solid #1e293b; border-right: 1px solid #1e293b;">
-                {f'<div style="font-size: 28px;">🥇</div><strong style="color: #fbbf24; font-size: 15px; display: block;">{p1["name"]}</strong><span style="color: #fde68a; font-size: 12px; font-weight: bold;">{int(p1["total_score"])} pts ({p1["wins"]} vic)</span>' if p1 else ''}
+                {f'<div style="font-size: 28px;">🥇</div><strong style="color: #fbbf24; font-size: 15px; display: block;">{p1["name"]}</strong><span style="color: #fde68a; font-size: 12px; font-weight: bold;">{int(p1["total_score"])} pts ({p1["wins"]} vic · {p1.get("monthly_races", p1["matches_played"])} carr.)</span>' if p1 else ''}
               </td>
               <td style="width: 33%; text-align: center; vertical-align: bottom; padding: 8px;">
-                {f'<div style="font-size: 20px;">🥉</div><strong style="color: #d97706; font-size: 13px; display: block;">{p3["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{int(p3["total_score"])} pts</span>' if p3 else ''}
+                {f'<div style="font-size: 20px;">🥉</div><strong style="color: #d97706; font-size: 13px; display: block;">{p3["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{int(p3["total_score"])} pts ({p3.get("monthly_races", p3["matches_played"])} carr.)</span>' if p3 else ''}
               </td>
             </tr>
           </table>
@@ -1101,14 +1114,18 @@ def render_monthly_mario_kart_email(template: Dict[str, Any], month: Optional[st
     if template.get("include_standings"):
         for idx, p in enumerate(lb, start=1):
             medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}º"))
+            m_races = p.get('monthly_races', p['matches_played'])
+            t_races = p.get('races_played', p['matches_played'])
             standings_rows += f"""
             <tr style="border-bottom: 1px solid #1e293b;">
-              <td style="padding: 8px 12px; text-align: center; font-weight: bold; color: #fbbf24;">{medal}</td>
-              <td style="padding: 8px 12px; color: #ffffff; font-size: 13px;"><strong>{p['name']}</strong> <span style="color: #64748b; font-size: 11px;">@{p.get('nickname') or ''}</span></td>
-              <td style="padding: 8px 12px; text-align: center; color: #10b981; font-weight: bold;">{p['wins']}</td>
-              <td style="padding: 8px 12px; text-align: center; color: #94a3b8;">{p['matches_played']}</td>
-              <td style="padding: 8px 12px; text-align: center; color: #f59e0b;">{p['win_rate']}%</td>
-              <td style="padding: 8px 12px; text-align: right; color: #fbbf24; font-weight: 800;">{int(p['total_score'])} pts</td>
+              <td style="padding: 8px 6px; text-align: center; font-weight: bold; color: #fbbf24;">{medal}</td>
+              <td style="padding: 8px 8px; color: #ffffff; font-size: 13px;"><strong>{p['name']}</strong> <span style="color: #64748b; font-size: 11px;">@{p.get('nickname') or ''}</span></td>
+              <td style="padding: 8px 6px; text-align: center; color: #10b981; font-weight: bold;">{p['wins']}</td>
+              <td style="padding: 8px 6px; text-align: center; color: #94a3b8;">{p['matches_played']}</td>
+              <td style="padding: 8px 6px; text-align: center; color: #38bdf8; font-weight: bold;">{m_races}</td>
+              <td style="padding: 8px 6px; text-align: center; color: #818cf8; font-weight: bold;">{t_races}</td>
+              <td style="padding: 8px 6px; text-align: center; color: #f59e0b;">{p['win_rate']}%</td>
+              <td style="padding: 8px 10px; text-align: right; color: #fbbf24; font-weight: 800;">{int(p['total_score'])} pts</td>
             </tr>
             """
 
@@ -1182,13 +1199,15 @@ def render_monthly_mario_kart_email(template: Dict[str, Any], month: Optional[st
               <h3 style="color: #e2e8f0; font-size: 12px; text-transform: uppercase; margin: 0 0 10px 0;">📊 Tabla Acumulada del Mes</h3>
               <table border="0" cellpadding="0" cellspacing="0" width="100%">
                 <thead>
-                  <tr style="border-bottom: 1px solid #1e293b; color: #64748b; font-size: 11px; text-transform: uppercase;">
-                    <th style="padding: 6px 12px; text-align: center;">Pos</th>
-                    <th style="padding: 6px 12px; text-align: left;">Jugador</th>
-                    <th style="padding: 6px 12px; text-align: center;">Vic</th>
-                    <th style="padding: 6px 12px; text-align: center;">Partidas</th>
-                    <th style="padding: 6px 12px; text-align: center;">Win%</th>
-                    <th style="padding: 6px 12px; text-align: right;">Pts</th>
+                  <tr style="border-bottom: 1px solid #1e293b; color: #64748b; font-size: 10px; text-transform: uppercase;">
+                    <th style="padding: 6px 6px; text-align: center; width: 32px;">Pos</th>
+                    <th style="padding: 6px 8px; text-align: left;">Jugador</th>
+                    <th style="padding: 6px 6px; text-align: center;">Vic</th>
+                    <th style="padding: 6px 6px; text-align: center;">Partidas</th>
+                    <th style="padding: 6px 6px; text-align: center; color: #38bdf8;">Carreras (Mes)</th>
+                    <th style="padding: 6px 6px; text-align: center; color: #818cf8;">Carreras (Total)</th>
+                    <th style="padding: 6px 6px; text-align: center;">Win%</th>
+                    <th style="padding: 6px 10px; text-align: right;">Pts</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1210,5 +1229,5 @@ def render_monthly_mario_kart_email(template: Dict[str, Any], month: Optional[st
     </html>
     """
 
-    plain = f"Resumen Mensual Mario Kart 8 ({month_display})\n" + "\n".join([f"{p['name']}: {p['wins']} vic, {p['total_score']} pts" for p in lb])
+    plain = f"Resumen Mensual Mario Kart 8 ({month_display}) - {monthly_races} carreras este mes ({all_time_races} históricas)\n" + "\n".join([f"{p['name']}: {p['wins']} vic, {p.get('monthly_races', p['matches_played'])} carreras este mes ({p.get('races_played', p['matches_played'])} tot.), {int(p['total_score'])} pts" for p in lb])
     return html, plain, chart_file

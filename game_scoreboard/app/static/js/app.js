@@ -102,7 +102,7 @@ async function loadDashboard() {
     if (overviewRes.ok) {
       const ov = await overviewRes.json();
       document.getElementById('kpi-matches').textContent = ov.total_matches;
-      document.getElementById('kpi-practice-sub').textContent = `${ov.competitive_matches} comp. · ${ov.practice_matches} práct.`;
+      document.getElementById('kpi-practice-sub').textContent = `${ov.total_races || 0} carreras (${ov.monthly_races || 0} mes) · ${ov.competitive_matches} comp.`;
       document.getElementById('kpi-players').textContent = ov.total_players;
       document.getElementById('kpi-sessions').textContent = ov.active_sessions;
       document.getElementById('kpi-top-game').textContent = ov.top_game;
@@ -396,7 +396,7 @@ function renderPodium(leaderboard) {
         <div class="mb-2 flex flex-col items-center text-center">
           ${avatarHtml}
           <div class="font-bold text-xs text-white mt-1 truncate max-w-[90px]">${it.nickname || it.name}</div>
-          <div class="text-[11px] font-semibold text-amber-400">${it.wins} victorias</div>
+          <div class="text-[11px] font-semibold text-amber-400">${it.wins} vic · ${it.races_played || it.matches_played} carr.</div>
         </div>
         <div class="w-full ${slot.height} rounded-2xl border ${slot.color} flex flex-col items-center justify-center shadow-lg">
           <span class="text-base font-black">${slot.badge}</span>
@@ -410,7 +410,7 @@ function renderPodium(leaderboard) {
 function renderLeaderboard(data) {
   const tbody = document.getElementById('leaderboard-body');
   if (!data || data.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-500">Aún no hay partidas registradas con los filtros seleccionados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500">Aún no hay partidas registradas con los filtros seleccionados.</td></tr>`;
     return;
   }
 
@@ -432,6 +432,7 @@ function renderLeaderboard(data) {
           </div>
         </td>
         <td class="py-3 px-4 text-center text-slate-300 font-semibold">${r.matches_played}</td>
+        <td class="py-3 px-4 text-center text-sky-400 font-bold">${r.races_played || r.matches_played}</td>
         <td class="py-3 px-4 text-center text-emerald-400 font-bold">${r.wins}</td>
         <td class="py-3 px-4 text-center">
           <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${r.win_rate >= 50 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-400'}">${r.win_rate}%</span>
@@ -685,6 +686,7 @@ function renderSessionDetail(s) {
         </td>
         <td class="py-2.5 px-4 text-center text-emerald-400 font-bold">${st.wins}</td>
         <td class="py-2.5 px-4 text-center text-slate-400">${st.matches_played}</td>
+        <td class="py-2.5 px-4 text-center text-sky-400 font-semibold">${st.races_played || st.matches_played}</td>
         <td class="py-2.5 px-4 text-right font-black text-amber-400 text-base">${st.total_score}</td>
       </tr>
     `;
@@ -718,6 +720,7 @@ function renderSessionDetail(s) {
               <div class="flex items-center gap-2">
                 <span class="font-black text-indigo-400 text-sm">Partida #${m.match_number}</span>
                 <span class="text-xs text-slate-300 font-semibold">(${m.match_type})</span>
+                ${m.race_count ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/30">🏁 ${m.race_count} carreras</span>` : ''}
                 ${practiceBadge}
               </div>
               <div class="flex items-center gap-1.5">
@@ -806,7 +809,7 @@ function renderSessionDetail(s) {
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <span>📊</span> Tabla de Puntuación de la Sesión
         </h3>
-        <span class="text-xs text-slate-400">${s.matches.length} partidas registradas</span>
+        <span class="text-xs text-slate-400">${s.matches.length} partidas registradas${s.total_races ? ` · 🏁 ${s.total_races} carreras` : ''}</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs text-slate-300">
@@ -816,6 +819,7 @@ function renderSessionDetail(s) {
               <th class="py-2.5 px-4">Jugador</th>
               <th class="py-2.5 px-4 text-center">Victorias 🥇</th>
               <th class="py-2.5 px-4 text-center">Partidas</th>
+              <th class="py-2.5 px-4 text-center">Carreras 🏁</th>
               <th class="py-2.5 px-4 text-right">Puntos Totales</th>
             </tr>
           </thead>

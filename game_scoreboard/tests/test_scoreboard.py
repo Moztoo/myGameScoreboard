@@ -406,16 +406,32 @@ def test_monthly_mario_kart_template_and_timeline_stats():
     assert "Mario Kart" in mk_monthly["name"]
     assert mk_monthly["banner_url"] == "static/img/banner_mario_kart.jpg"
 
-    # 2. Timeline API check
+    # 2. Timeline API & Overview & Leaderboard race stats check
     tl_res = client.get("/api/stats/timeline")
     assert tl_res.status_code == 200
     data = tl_res.json()
     assert "timeline" in data
     assert "character_stats" in data
     assert "players" in data
+    assert "total_races" in data
+    assert "player_races" in data
+
+    ov_res = client.get("/api/stats/overview")
+    assert ov_res.status_code == 200
+    ov_data = ov_res.json()
+    assert "total_races" in ov_data
+    assert "monthly_races" in ov_data
+
+    lb_res = client.get("/api/stats/leaderboard")
+    assert lb_res.status_code == 200
+    lb_data = lb_res.json()
+    if lb_data:
+        assert "races_played" in lb_data[0]
+        assert "monthly_races" in lb_data[0]
 
     # 3. Monthly email render check
     html, plain, chart_file = render_monthly_mario_kart_email(mk_monthly)
     assert "Mario Kart 8 Deluxe" in html
     assert "cid:tournament_banner" in html
     assert "Resumen Mensual" in plain
+    assert "carreras" in html.lower() or "carr." in html.lower()

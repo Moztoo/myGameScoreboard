@@ -2,6 +2,8 @@ import os
 import sqlite3
 import json
 import yaml
+import re
+from typing import Any
 from pathlib import Path
 
 # Paths configuration
@@ -10,6 +12,34 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR.parent / "data"))
 DB_PATH = DATA_DIR / "scoreboard.db"
 AVATARS_DIR = DATA_DIR / "avatars"
 DEFAULT_GAMES_PATH = BASE_DIR / "default_games.yaml"
+
+
+def get_match_race_count(rule_values: Any, match_type: str = "") -> int:
+    """Extract the number of races played in a match from its rules or match type."""
+    if isinstance(rule_values, str):
+        try:
+            rule_values = json.loads(rule_values)
+        except Exception:
+            rule_values = {}
+    elif not isinstance(rule_values, dict):
+        rule_values = {}
+
+    carreras_val = rule_values.get("carreras") or rule_values.get("races")
+    if carreras_val:
+        m = re.search(r'\d+', str(carreras_val))
+        if m:
+            return int(m.group(0))
+
+    if match_type and "individual" in match_type.lower():
+        return 1
+
+    for k, v in rule_values.items():
+        if "carrera" in str(k).lower():
+            m = re.search(r'\d+', str(v))
+            if m:
+                return int(m.group(0))
+
+    return 1
 
 
 def ensure_directories():
