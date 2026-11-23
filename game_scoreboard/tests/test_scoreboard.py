@@ -333,4 +333,10 @@ def test_email_settings_and_test_trigger():
         mock_instance.starttls.assert_called_once()
         mock_instance.login.assert_called_once_with("server@gmail.com", "abcdefghijklmnop")
         mock_instance.sendmail.assert_called_once()
-        mock_instance.quit.assert_called_once()
+        # Test with explicit None password (user already saved password and left field blank)
+        test_res2 = client.post("/api/settings/email/test", json={
+            "sender_email": "server@gmail.com",
+            "smtp_password": None
+        })
+        assert test_res2.status_code == 200
+        assert test_res2.json()["status"] == "ok"

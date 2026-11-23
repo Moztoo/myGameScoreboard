@@ -40,7 +40,7 @@ def save_email_config(config: Dict[str, Any]) -> Dict[str, Any]:
     existing = get_email_config()
     
     # Don't overwrite password with masked value if user didn't change it
-    new_pw = config.get("smtp_password", "").strip()
+    new_pw = (config.get("smtp_password") or "").strip()
     if not new_pw or new_pw == "********":
         config["smtp_password"] = existing.get("smtp_password", "")
     else:
@@ -75,12 +75,12 @@ def send_test_email(override_config: Optional[Dict[str, Any]] = None) -> Dict[st
     """
     cfg = get_email_config()
     if override_config:
-        new_pw = override_config.get("smtp_password", "").strip()
+        new_pw = (override_config.get("smtp_password") or "").strip()
         if new_pw and new_pw != "********":
             override_config["smtp_password"] = new_pw.replace(" ", "")
         else:
             override_config["smtp_password"] = cfg.get("smtp_password", "")
-        cfg.update(override_config)
+        cfg.update({k: v for k, v in override_config.items() if v is not None})
 
     sender_email = (cfg.get("sender_email") or "").strip()
     smtp_password = (cfg.get("smtp_password") or "").strip()
@@ -107,7 +107,7 @@ def send_test_email(override_config: Optional[Dict[str, Any]] = None) -> Dict[st
     if not players_with_email:
         raise ValueError("No se encontraron jugadores con correo registrado. Agrega o edita el perfil de al menos un jugador en la pestaña 'Jugadores'.")
 
-    recipients = [p["email"].strip() for p in players_with_email if p["email"].strip()]
+    recipients = [(p.get("email") or "").strip() for p in players_with_email if (p.get("email") or "").strip()]
 
     # 2. Build HTML Body
     players_list_html = "".join([
@@ -257,11 +257,11 @@ def send_session_report_email(session_id: int) -> Dict[str, Any]:
         return {"status": "error", "message": str(e)}
 
     # Filter players with email
-    participating_with_email = [p for p in session["players"] if p.get("email") and p["email"].strip()]
+    participating_with_email = [p for p in session["players"] if (p.get("email") or "").strip()]
     if not participating_with_email:
         return {"status": "skipped", "message": "No participating players have an email"}
 
-    recipients = [p["email"].strip() for p in participating_with_email]
+    recipients = [(p.get("email") or "").strip() for p in participating_with_email]
 
     # Build Standings Table HTML
     standings_rows = ""
