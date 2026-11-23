@@ -134,4 +134,23 @@ def init_db():
                 ))
             conn.commit()
 
+    # Auto-fix rank positions for any existing Mario Kart matches (highest score = 1st rank)
+    try:
+        cursor.execute("""
+        SELECT DISTINCT m.id 
+        FROM matches m
+        JOIN sessions s ON m.session_id = s.id
+        JOIN games g ON s.game_id = g.id
+        WHERE g.id LIKE '%mario_kart%' OR g.name LIKE '%mario kart%'
+        """)
+        mk_matches = [row["id"] for row in cursor.fetchall()]
+        for m_id in mk_matches:
+            cursor.execute("SELECT id, score FROM match_scores WHERE match_id = ? ORDER BY score DESC, id ASC", (m_id,))
+            scores_to_fix = cursor.fetchall()
+            for r_idx, sc_row in enumerate(scores_to_fix, start=1):
+                cursor.execute("UPDATE match_scores SET rank_position = ? WHERE id = ?", (r_idx, sc_row["id"]))
+        conn.commit()
+    except Exception:
+        pass
+
     conn.close()

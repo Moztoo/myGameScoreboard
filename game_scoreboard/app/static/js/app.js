@@ -727,8 +727,40 @@ async function handleCreateSession(e) {
 let currentRecordingSession = null;
 let currentEditingMatchId = null;
 let currentSelectedPlayerIds = new Set();
+let currentMatchGame = null;
 let currentGameMetricsDef = null;
 let currentGameDefaultPoints = [15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+
+function isMarioKartGame(game) {
+  if (!game) return false;
+  const id = (game.id || '').toLowerCase();
+  const name = (game.name || '').toLowerCase();
+  return id.includes('mario_kart') || id.includes('mariokart') || name.includes('mario kart');
+}
+
+function autoRankMarioKartScores() {
+  if (!isMarioKartGame(currentMatchGame)) return;
+
+  const playerScores = [];
+  currentSelectedPlayerIds.forEach(playerId => {
+    const scoreInp = document.querySelector(`[name="score_${playerId}"]`);
+    const scoreVal = scoreInp ? parseFloat(scoreInp.value) : 0;
+    playerScores.push({
+      playerId,
+      score: isNaN(scoreVal) ? 0 : scoreVal
+    });
+  });
+
+  // Sort descending by score (highest points = 1st place)
+  playerScores.sort((a, b) => b.score - a.score);
+
+  playerScores.forEach((item, idx) => {
+    const rankInp = document.querySelector(`[name="rank_${item.playerId}"]`);
+    if (rankInp) {
+      rankInp.value = idx + 1;
+    }
+  });
+}
 
 function toggleMatchPlayer(playerId, isChecked) {
   if (isChecked) {
@@ -764,6 +796,18 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
   const scoresBody = document.getElementById('match-players-scores-body');
   if (!scoresBody) return;
 
+  const isMK = isMarioKartGame(currentMatchGame);
+
+  // Toggle Mario Kart auto-ranking banner in modal
+  const autoRankBanner = document.getElementById('mk-auto-rank-banner');
+  if (autoRankBanner) {
+    if (isMK) {
+      autoRankBanner.classList.remove('hidden');
+    } else {
+      autoRankBanner.classList.add('hidden');
+    }
+  }
+
   const selectedPlayers = currentRecordingSession.players.filter(p => currentSelectedPlayerIds.has(p.id));
 
   if (selectedPlayers.length === 0) {
@@ -790,6 +834,16 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
       metricInput = `<select name="metric_${p.id}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">${opts}</select>`;
     }
 
+    // Rank input: readonly if Mario Kart (auto-ranked), editable if other game
+    const rankInputHtml = isMK
+      ? `<input type="number" name="rank_${p.id}" value="${rankVal}" readonly class="w-full text-center bg-slate-900/90 border border-indigo-500/30 rounded-lg px-2 py-1 text-xs text-indigo-300 font-black cursor-default select-none focus:outline-none" title="Calculado automáticamente por puntaje">`
+      : `<input type="number" name="rank_${p.id}" value="${rankVal}" min="1" max="100" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-bold">`;
+
+    // Score input: oninput triggers autoRankMarioKartScores if Mario Kart
+    const scoreInputHtml = isMK
+      ? `<input type="number" name="score_${p.id}" value="${scoreVal}" step="any" oninput="autoRankMarioKartScores()" class="w-full text-center bg-slate-900 border border-slate-700 focus:border-indigo-500 rounded-lg px-2 py-1 text-xs text-amber-400 font-black">`
+      : `<input type="number" name="score_${p.id}" value="${scoreVal}" step="any" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-400 font-black">`;
+
     return `
       <tr class="hover:bg-slate-800/30">
         <td class="py-2.5 px-3 flex items-center gap-2">
@@ -797,10 +851,10 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
           <span class="font-bold text-white">${p.nickname || p.name}</span>
         </td>
         <td class="py-2.5 px-3">
-          <input type="number" name="rank_${p.id}" value="${rankVal}" min="1" max="100" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-bold">
+          ${rankInputHtml}
         </td>
         <td class="py-2.5 px-3">
-          <input type="number" name="score_${p.id}" value="${scoreVal}" step="any" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-400 font-black">
+          ${scoreInputHtml}
         </td>
         <td class="py-2.5 px-3">
           ${metricInput}
@@ -808,6 +862,10 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
       </tr>
     `;
   }).join('');
+
+  if (isMK) {
+    autoRankMarioKartScores();
+  }
 }
 
 async function prepareMatchModalBase(session) {
@@ -815,6 +873,7 @@ async function prepareMatchModalBase(session) {
 
   const gameRes = await fetch(getApiUrl(`/api/games/${session.game_id}`));
   const game = await gameRes.json();
+  currentMatchGame = game;
 
   currentGameDefaultPoints = game.default_points_system || [15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
   currentGameMetricsDef = (game.player_metrics || []).find(m => m.id === 'character') || game.player_metrics?.[0];
@@ -990,6 +1049,14 @@ async function handleCreateOrUpdateMatch(e) {
       metrics
     });
   });
+
+  // For Mario Kart, strictly enforce rank_position by score descending
+  if (isMarioKartGame(currentMatchGame)) {
+    scores.sort((a, b) => b.score - a.score);
+    scores.forEach((sc, idx) => {
+      sc.rank_position = idx + 1;
+    });
+  }
 
   const submitBtn = document.getElementById('btn-save-match');
   if (submitBtn) {

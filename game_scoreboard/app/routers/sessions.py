@@ -264,12 +264,27 @@ def update_match(match_id: int, match_data: MatchCreate):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT session_id, match_number FROM matches WHERE id = ?", (match_id,))
+    cursor.execute("""
+    SELECT m.session_id, m.match_number, s.game_id, g.name AS game_name
+    FROM matches m
+    JOIN sessions s ON m.session_id = s.id
+    JOIN games g ON s.game_id = g.id
+    WHERE m.id = ?
+    """, (match_id,))
     existing = cursor.fetchone()
     if not existing:
         conn.close()
         raise HTTPException(status_code=404, detail="Partida no encontrada")
     session_id = existing["session_id"]
+    game_id = (existing["game_id"] or "").lower()
+    game_name = (existing["game_name"] or "").lower()
+    is_mario_kart = "mario_kart" in game_id or "mario kart" in game_name or "mariokart" in game_id
+
+    # Auto-rank Mario Kart matches by score descending
+    if is_mario_kart and match_data.scores:
+        match_data.scores.sort(key=lambda s: s.score, reverse=True)
+        for rank_idx, sc in enumerate(match_data.scores, start=1):
+            sc.rank_position = rank_idx
 
     cursor.execute("""
     UPDATE matches SET
@@ -316,10 +331,26 @@ def add_match(session_id: int, match_data: MatchCreate):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
-    if not cursor.fetchone():
+    cursor.execute("""
+    SELECT s.id, s.game_id, g.name AS game_name
+    FROM sessions s
+    JOIN games g ON s.game_id = g.id
+    WHERE s.id = ?
+    """, (session_id,))
+    session_row = cursor.fetchone()
+    if not session_row:
         conn.close()
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
+
+    game_id = (session_row["game_id"] or "").lower()
+    game_name = (session_row["game_name"] or "").lower()
+    is_mario_kart = "mario_kart" in game_id or "mario kart" in game_name or "mariokart" in game_id
+
+    # Auto-rank Mario Kart matches by score descending
+    if is_mario_kart and match_data.scores:
+        match_data.scores.sort(key=lambda s: s.score, reverse=True)
+        for rank_idx, sc in enumerate(match_data.scores, start=1):
+            sc.rank_position = rank_idx
 
     # Determine match number
     cursor.execute("SELECT COALESCE(MAX(match_number), 0) + 1 AS next_num FROM matches WHERE session_id = ?", (session_id,))

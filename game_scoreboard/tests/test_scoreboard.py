@@ -190,6 +190,43 @@ def test_session_and_practice_match_filter():
     assert res_resume.json()["ended_at"] is None
 
 
+def test_mario_kart_auto_ranking():
+    """Verify that Mario Kart matches automatically rank players descending by score."""
+    p_a = client.post("/api/players", json={"name": "Player Low", "nickname": "Low"}).json()
+    p_b = client.post("/api/players", json={"name": "Player Mid", "nickname": "Mid"}).json()
+    p_c = client.post("/api/players", json={"name": "Player High", "nickname": "High"}).json()
+
+    session = client.post("/api/sessions", json={
+        "game_id": "mario_kart_8",
+        "title": "MK8 Auto Ranking Test",
+        "player_ids": [p_a["id"], p_b["id"], p_c["id"]]
+    }).json()
+
+    # Submit with completely inverted/scrambled rank positions
+    # High: 290 pts, Mid: 260 pts, Low: 210 pts
+    match_res = client.post(f"/api/sessions/{session['id']}/matches", json={
+        "match_type": "Torneo / Copa Completa",
+        "rule_values": {"clase": "150cc"},
+        "is_practice": False,
+        "scores": [
+            {"player_id": p_a["id"], "score": 210, "rank_position": 1},  # Intentionally wrong rank
+            {"player_id": p_b["id"], "score": 260, "rank_position": 3},  # Intentionally wrong rank
+            {"player_id": p_c["id"], "score": 290, "rank_position": 2}   # Intentionally wrong rank
+        ]
+    })
+    assert match_res.status_code == 200
+    match = match_res.json()["matches"][0]
+    
+    # Must be auto-ranked by score descending:
+    # 1st place: p_c (290 pts)
+    # 2nd place: p_b (260 pts)
+    # 3rd place: p_a (210 pts)
+    scores = {s["player_id"]: s["rank_position"] for s in match["scores"]}
+    assert scores[p_c["id"]] == 1
+    assert scores[p_b["id"]] == 2
+    assert scores[p_a["id"]] == 3
+
+
 def test_backup_export_and_import():
     """Verify that export creates a valid ZIP and import restores database and avatars."""
     # Create player and session
