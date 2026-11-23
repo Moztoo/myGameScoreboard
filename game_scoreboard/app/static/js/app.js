@@ -246,12 +246,60 @@ function renderRecentMatches(matches) {
 // -----------------------------------------------------------------------------
 // SESSIONS (MATCH TRACKER)
 // -----------------------------------------------------------------------------
+async function setupInlineSessionForm() {
+  await ensureGamesLoaded();
+  await ensurePlayersLoaded();
+
+  // Populate games
+  const gameSelect = document.getElementById('session-game-select');
+  if (gameSelect && cachedGames.length > 0) {
+    gameSelect.innerHTML = cachedGames.map(g => `<option value="${g.id}">${g.icon} ${g.name}</option>`).join('');
+  }
+
+  // Populate players checkboxes
+  const playersBox = document.getElementById('session-players-checkboxes');
+  if (playersBox) {
+    if (cachedPlayers.length === 0) {
+      playersBox.innerHTML = `<div class="col-span-full text-xs text-amber-400 py-3 text-center">No hay jugadores registrados todavía. Ve a la pestaña "Jugadores" y da de alta al menos uno.</div>`;
+    } else {
+      playersBox.innerHTML = cachedPlayers.map(p => `
+        <label class="flex items-center gap-2 p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition">
+          <input type="checkbox" name="session-players" value="${p.id}" checked class="rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-0">
+          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: ${p.color_hex}"></span>
+          <span class="text-xs text-white font-medium truncate">${p.nickname || p.name}</span>
+        </label>
+      `).join('');
+    }
+  }
+
+  // Pre-fill title if empty
+  const titleInput = document.getElementById('session-title');
+  if (titleInput && !titleInput.value) {
+    const dateStr = new Date().toLocaleDateString('es-ES', { weekday: 'long', month: 'short', day: 'numeric' });
+    titleInput.value = `Noche de juego - ${dateStr}`;
+  }
+}
+
 async function loadSessionsTab() {
+  await setupInlineSessionForm();
   if (activeSessionId) {
     await viewSession(activeSessionId);
   } else {
-    document.getElementById('session-detail-view').classList.add('hidden');
-    document.getElementById('sessions-list-container').classList.remove('hidden');
+    const detailView = document.getElementById('session-detail-view');
+    if (detailView) {
+      detailView.classList.add('hidden');
+      detailView.style.display = 'none';
+    }
+    const createCard = document.getElementById('session-create-card');
+    if (createCard) {
+      createCard.classList.remove('hidden');
+      createCard.style.display = 'block';
+    }
+    const listContainer = document.getElementById('sessions-list-container');
+    if (listContainer) {
+      listContainer.classList.remove('hidden');
+      listContainer.style.display = 'block';
+    }
     await loadSessionsList();
   }
 }
@@ -264,7 +312,7 @@ async function loadSessionsList() {
     const sessions = await res.json();
 
     if (!sessions || sessions.length === 0) {
-      container.innerHTML = `<div class="col-span-full text-center py-12 text-slate-500">No hay sesiones creadas aún. ¡Inicia una nueva sesión para comenzar!</div>`;
+      container.innerHTML = `<div class="col-span-full text-center py-8 text-slate-500 text-xs">Aún no hay sesiones creadas. Usa el formulario de arriba para iniciar tu primera sesión.</div>`;
       return;
     }
 
@@ -280,12 +328,12 @@ async function loadSessionsList() {
       }).join('');
 
       return `
-        <div onclick="viewSession(${s.id})" class="game-card-hover cursor-pointer p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between space-y-4 shadow-md">
+        <div onclick="viewSession(${s.id})" class="game-card-hover cursor-pointer p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between space-y-3.5 shadow-md">
           <div class="flex items-start justify-between gap-3">
-            <div class="flex items-center gap-3">
-              <span class="text-3xl">${s.game_icon || '🎮'}</span>
+            <div class="flex items-center gap-2.5">
+              <span class="text-2xl sm:text-3xl">${s.game_icon || '🎮'}</span>
               <div>
-                <h4 class="font-bold text-white text-base leading-tight">${s.title}</h4>
+                <h4 class="font-bold text-white text-sm sm:text-base leading-tight">${s.title}</h4>
                 <div class="text-xs text-indigo-400 font-medium">${s.game_name}</div>
               </div>
             </div>
@@ -310,9 +358,21 @@ async function loadSessionsList() {
 
 async function viewSession(sessionId) {
   activeSessionId = sessionId;
-  document.getElementById('sessions-list-container').classList.add('hidden');
+  const createCard = document.getElementById('session-create-card');
+  if (createCard) {
+    createCard.classList.add('hidden');
+    createCard.style.display = 'none';
+  }
+  const listContainer = document.getElementById('sessions-list-container');
+  if (listContainer) {
+    listContainer.classList.add('hidden');
+    listContainer.style.display = 'none';
+  }
   const detailView = document.getElementById('session-detail-view');
-  detailView.classList.remove('hidden');
+  if (detailView) {
+    detailView.classList.remove('hidden');
+    detailView.style.display = 'block';
+  }
 
   try {
     const res = await fetch(getApiUrl(`/api/sessions/${sessionId}`));
@@ -330,8 +390,21 @@ async function viewSession(sessionId) {
 
 function closeSessionDetail() {
   activeSessionId = null;
-  document.getElementById('session-detail-view').classList.add('hidden');
-  document.getElementById('sessions-list-container').classList.remove('hidden');
+  const detailView = document.getElementById('session-detail-view');
+  if (detailView) {
+    detailView.classList.add('hidden');
+    detailView.style.display = 'none';
+  }
+  const createCard = document.getElementById('session-create-card');
+  if (createCard) {
+    createCard.classList.remove('hidden');
+    createCard.style.display = 'block';
+  }
+  const listContainer = document.getElementById('sessions-list-container');
+  if (listContainer) {
+    listContainer.classList.remove('hidden');
+    listContainer.style.display = 'block';
+  }
   loadSessionsList();
 }
 
@@ -572,15 +645,26 @@ async function openNewSessionModal() {
 async function handleCreateSession(e) {
   e.preventDefault();
   const game_id = document.getElementById('session-game-select').value;
-  const title = document.getElementById('session-title').value;
-  const notes = document.getElementById('session-notes').value;
+  const title = document.getElementById('session-title').value.trim();
+  const notes = document.getElementById('session-notes').value.trim();
 
   const playerCheckboxes = document.querySelectorAll('input[name="session-players"]:checked');
   const player_ids = Array.from(playerCheckboxes).map(cb => parseInt(cb.value, 10));
 
-  if (player_ids.length === 0) {
-    showToast('Selecciona al menos un jugador participante', 'error');
+  if (!title) {
+    showToast('El título de la sesión es requerido', 'error');
     return;
+  }
+
+  if (player_ids.length === 0) {
+    showToast('Selecciona al menos un jugador participante para la sesión', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-create-session');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Iniciando sesión...';
   }
 
   try {
@@ -591,7 +675,8 @@ async function handleCreateSession(e) {
     });
     if (res.ok) {
       const newSession = await res.json();
-      closeModal('modal-session');
+      document.getElementById('session-title').value = '';
+      document.getElementById('session-notes').value = '';
       showToast('¡Sesión iniciada con éxito!', 'success');
       viewSession(newSession.id);
     } else {
@@ -599,6 +684,11 @@ async function handleCreateSession(e) {
     }
   } catch (err) {
     showToast('Error al conectar con el servidor', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🚀</span> Comenzar Sesión';
+    }
   }
 }
 
@@ -765,47 +855,52 @@ async function handleCreateMatch(e) {
 // -----------------------------------------------------------------------------
 async function loadPlayers() {
   const container = document.getElementById('players-grid');
+  const countLabel = document.getElementById('players-count-label');
   try {
     const res = await fetch(getApiUrl('/api/players'));
     if (!res.ok) return;
     const players = await res.json();
     cachedPlayers = players;
 
+    if (countLabel) {
+      countLabel.textContent = `${players.length} ${players.length === 1 ? 'jugador' : 'jugadores'}`;
+    }
+
     if (!players || players.length === 0) {
-      container.innerHTML = `<div class="col-span-full text-center py-12 text-slate-500">No hay jugadores registrados. Haz clic en "Dar de Alta Jugador".</div>`;
+      container.innerHTML = `<div class="col-span-full text-center py-8 text-slate-500 text-xs">Aún no hay jugadores registrados. Usa el formulario de arriba para dar de alta al primer jugador.</div>`;
       return;
     }
 
     container.innerHTML = players.map(p => {
       const avatarHtml = p.avatar_url
-        ? `<img src="${getApiUrl(p.avatar_url)}" class="w-16 h-16 rounded-2xl object-cover border-2 shadow-md" style="border-color: ${p.color_hex}">`
-        : `<div class="w-16 h-16 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-md" style="background-color: ${p.color_hex}">${p.name.substring(0, 2).toUpperCase()}</div>`;
+        ? `<img src="${getApiUrl(p.avatar_url)}" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 shadow-md" style="border-color: ${p.color_hex}">`
+        : `<div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center font-black text-lg sm:text-xl text-white shadow-md" style="background-color: ${p.color_hex}">${p.name.substring(0, 2).toUpperCase()}</div>`;
 
       return `
-        <div class="game-card-hover p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between space-y-4 shadow-sm relative">
-          <button onclick="handleDeletePlayer(${p.id})" class="absolute top-3 right-3 text-slate-600 hover:text-rose-400 text-xs transition" title="Eliminar jugador">✕</button>
+        <div class="game-card-hover p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between space-y-3.5 shadow-sm relative">
+          <button onclick="handleDeletePlayer(${p.id})" class="absolute top-3 right-3 text-slate-600 hover:text-rose-400 text-xs p-1 transition" title="Eliminar jugador">✕</button>
 
-          <div class="flex items-center gap-4">
+          <div class="flex items-center gap-3">
             ${avatarHtml}
             <div>
-              <h4 class="font-bold text-white text-base">${p.name}</h4>
+              <h4 class="font-bold text-white text-sm sm:text-base leading-tight">${p.name}</h4>
               <div class="text-xs text-indigo-400 font-mono">${p.nickname ? '@' + p.nickname : 'Sin apodo'}</div>
-              <div class="text-[10px] text-slate-500 mt-1">Registrado: ${new Date(p.created_at).toLocaleDateString()}</div>
+              <div class="text-[10px] text-slate-500 mt-0.5">Registrado: ${new Date(p.created_at).toLocaleDateString()}</div>
             </div>
           </div>
 
-          <div class="grid grid-cols-3 gap-2 pt-3 border-t border-slate-800/80 text-center">
+          <div class="grid grid-cols-3 gap-1.5 pt-2.5 border-t border-slate-800/80 text-center">
             <div>
               <div class="text-[10px] text-slate-500 uppercase font-semibold">Partidas</div>
-              <div class="font-bold text-slate-300 text-sm">${p.total_matches}</div>
+              <div class="font-bold text-slate-300 text-xs sm:text-sm">${p.total_matches}</div>
             </div>
             <div>
               <div class="text-[10px] text-slate-500 uppercase font-semibold">Victorias</div>
-              <div class="font-bold text-emerald-400 text-sm">${p.wins}</div>
+              <div class="font-bold text-emerald-400 text-xs sm:text-sm">${p.wins}</div>
             </div>
             <div>
               <div class="text-[10px] text-slate-500 uppercase font-semibold">Win Rate</div>
-              <div class="font-bold text-amber-400 text-sm">${p.win_rate}%</div>
+              <div class="font-bold text-amber-400 text-xs sm:text-sm">${p.win_rate}%</div>
             </div>
           </div>
         </div>
@@ -816,17 +911,27 @@ async function loadPlayers() {
   }
 }
 
-function openNewPlayerModal() {
-  document.getElementById('form-new-player').reset();
-  openModal('modal-player');
-}
-
 async function handleCreatePlayer(e) {
   e.preventDefault();
-  const name = document.getElementById('player-name').value;
-  const nickname = document.getElementById('player-nickname').value;
-  const color_hex = document.getElementById('player-color').value;
+  const nameInp = document.getElementById('player-name');
+  const nickInp = document.getElementById('player-nickname');
+  const colorInp = document.getElementById('player-color');
   const fileInput = document.getElementById('player-avatar-file');
+  const submitBtn = document.getElementById('btn-save-player');
+
+  const name = nameInp ? nameInp.value.trim() : '';
+  const nickname = nickInp ? nickInp.value.trim() : '';
+  const color_hex = colorInp ? colorInp.value : '#6366f1';
+
+  if (!name) {
+    showToast('El nombre del jugador es requerido', 'error');
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando...';
+  }
 
   try {
     const res = await fetch(getApiUrl('/api/players'), {
@@ -843,7 +948,7 @@ async function handleCreatePlayer(e) {
     const newPlayer = await res.json();
 
     // If avatar image selected, upload it
-    if (fileInput.files.length > 0) {
+    if (fileInput && fileInput.files.length > 0) {
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
       await fetch(getApiUrl(`/api/players/${newPlayer.id}/avatar`), {
@@ -852,11 +957,21 @@ async function handleCreatePlayer(e) {
       });
     }
 
-    closeModal('modal-player');
-    showToast('¡Jugador registrado exitosamente!', 'success');
-    loadPlayers();
+    // Reset inputs
+    if (nameInp) nameInp.value = '';
+    if (nickInp) nickInp.value = '';
+    if (fileInput) fileInput.value = '';
+
+    showToast(`¡Jugador "${newPlayer.name}" registrado con éxito!`, 'success');
+    cachedPlayers = []; // invalidate cache
+    await loadPlayers();
   } catch (err) {
     showToast('Error de conexión al registrar jugador', 'error');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>+</span> Guardar Jugador';
+    }
   }
 }
 
@@ -957,7 +1072,8 @@ async function handleCreateGame(e) {
     });
 
     if (res.ok) {
-      closeModal('modal-game');
+      document.getElementById('game-id').value = '';
+      document.getElementById('game-name').value = '';
       showToast('¡Videojuego agregado al catálogo!', 'success');
       cachedGames = [];
       loadGames();

@@ -145,7 +145,6 @@
           <span>🏆</span> Podio de Campeones
         </h3>
         <div class="grid grid-cols-3 gap-2 sm:gap-4 items-end max-w-lg mx-auto pt-4 pb-2" id="dash-podium">
-          <!-- Rendered dynamically -->
         </div>
       </div>
 
@@ -191,19 +190,54 @@
 
 
     <!-- ===================================================================== -->
-    <!-- TAB: SESSIONS (LIVE MATCH TRACKER)                                    -->
+    <!-- TAB: SESSIONS (LIVE MATCH TRACKER WITH INLINE CREATION FORM)          -->
     <!-- ===================================================================== -->
     <section id="tab-sessions" class="hidden space-y-4 sm:space-y-6">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 class="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-            <span>⚔️</span> Sesiones de Juego
-          </h2>
-          <p class="text-xs text-slate-400">Crea una sesión para una noche de juegos y anota cada partida en tiempo real.</p>
+      
+      <!-- Inline Form to Start New Session -->
+      <div id="session-create-card" class="bg-slate-900/90 rounded-2xl border border-indigo-500/30 p-4 sm:p-6 shadow-xl space-y-4">
+        <div class="flex items-center gap-2.5 border-b border-slate-800 pb-3">
+          <span class="text-2xl">⚔️</span>
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-white">Iniciar Nueva Sesión de Juego</h3>
+            <p class="text-xs text-slate-400">Selecciona el videojuego, los amigos presentes y anota partidas en vivo.</p>
+          </div>
         </div>
-        <button onclick="openNewSessionModal()" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition">
-          <span>+</span> Iniciar Nueva Sesión
-        </button>
+
+        <form id="form-inline-session" onsubmit="handleCreateSession(event)" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Videojuego *</label>
+              <select id="session-game-select" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Título de la Sesión *</label>
+              <input type="text" id="session-title" placeholder="ej. Viernes de Mario Kart con amigos" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-semibold uppercase text-slate-400">Jugadores Participantes *</label>
+              <span class="text-[11px] text-indigo-400">Marca a quienes jugarán hoy</span>
+            </div>
+            <div id="session-players-checkboxes" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800 min-h-[60px] max-h-48 overflow-y-auto">
+              <span class="col-span-full text-xs text-slate-500 text-center py-3">Cargando jugadores...</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Notas Opcionales</label>
+            <input type="text" id="session-notes" placeholder="ej. Torneo en casa de Ricardo" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button type="submit" id="btn-create-session" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+              <span>🚀</span> Comenzar Sesión
+            </button>
+          </div>
+        </form>
       </div>
 
       <!-- Active / Selected Session View -->
@@ -213,54 +247,131 @@
 
       <!-- Sessions List -->
       <div id="sessions-list-container" class="space-y-3">
-        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Historial de Sesiones</h3>
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Historial de Sesiones</h3>
         <div id="sessions-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          <!-- Rendered dynamically -->
         </div>
       </div>
     </section>
 
 
     <!-- ===================================================================== -->
-    <!-- TAB: PLAYERS                                                          -->
+    <!-- TAB: PLAYERS (WITH INLINE CREATION FORM)                             -->
     <!-- ===================================================================== -->
-    <section id="tab-players" class="hidden space-y-4 sm:space-y-6">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 class="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-            <span>👥</span> Roster de Jugadores
-          </h2>
-          <p class="text-xs text-slate-400">Registra a tus amigos con sus apodos, fotos y colores característicos.</p>
+    <section id="tab-players" class="hidden space-y-5">
+      
+      <!-- Inline Form to Register Player -->
+      <div class="bg-slate-900/90 rounded-2xl border border-indigo-500/30 p-4 sm:p-6 shadow-xl space-y-4">
+        <div class="flex items-center gap-2.5 border-b border-slate-800 pb-3">
+          <span class="text-2xl">👤</span>
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-white">Dar de Alta Nuevo Jugador</h3>
+            <p class="text-xs text-slate-400">Registra a tus amigos con sus apodos y fotos para llevar sus victorias y récords.</p>
+          </div>
         </div>
-        <button onclick="openNewPlayerModal()" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition">
-          <span>+</span> Dar de Alta Jugador
-        </button>
+
+        <form id="form-inline-player" onsubmit="handleCreatePlayer(event)" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Nombre Completo *</label>
+              <input type="text" id="player-name" placeholder="ej. Ricardo Mostalac" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Gamertag / Apodo</label>
+              <input type="text" id="player-nickname" placeholder="ej. TARS" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Color Distintivo</label>
+              <div class="flex items-center gap-3">
+                <input type="color" id="player-color" value="#6366f1" class="w-10 h-10 rounded-xl cursor-pointer bg-transparent border border-slate-700 p-0.5">
+                <span class="text-xs text-slate-400">Color distintivo para su avatar y gráficas</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Foto o Avatar (Opcional)</label>
+              <input type="file" id="player-avatar-file" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2.5 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-indigo-400 hover:file:bg-slate-700">
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button type="submit" id="btn-save-player" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+              <span>+</span> Guardar Jugador
+            </button>
+          </div>
+        </form>
       </div>
 
-      <div id="players-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-        <!-- Rendered dynamically -->
+      <!-- Players Roster Grid -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Jugadores Registrados (Roster)</h3>
+          <span class="text-xs text-slate-500" id="players-count-label">0 jugadores</span>
+        </div>
+        <div id="players-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        </div>
       </div>
     </section>
 
 
     <!-- ===================================================================== -->
-    <!-- TAB: GAMES CONFIGURATION                                              -->
+    <!-- TAB: GAMES CONFIGURATION (WITH INLINE CREATION FORM)                  -->
     <!-- ===================================================================== -->
-    <section id="tab-games" class="hidden space-y-4 sm:space-y-6">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 class="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-            <span>⚙️</span> Catálogo de Videojuegos y Reglas
-          </h2>
-          <p class="text-xs text-slate-400">Configura qué juegos juegan, los modos de carrera o combate y qué campos se registran.</p>
+    <section id="tab-games" class="hidden space-y-5">
+      <div class="bg-slate-900/90 rounded-2xl border border-indigo-500/30 p-4 sm:p-6 shadow-xl space-y-4">
+        <div class="flex items-center gap-2.5 border-b border-slate-800 pb-3">
+          <span class="text-2xl">🎮</span>
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-white">Agregar Nuevo Videojuego</h3>
+            <p class="text-xs text-slate-400">Define qué juego juegas con tus amigos y qué sistema de puntuación utiliza.</p>
+          </div>
         </div>
-        <button onclick="openNewGameModal()" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition">
-          <span>+</span> Agregar Videojuego
-        </button>
+
+        <form id="form-inline-game" onsubmit="handleCreateGame(event)" class="space-y-3.5">
+          <div class="grid grid-cols-3 gap-2.5">
+            <div class="col-span-1">
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Icono / Emoji</label>
+              <input type="text" id="game-icon" value="🎮" required class="w-full text-center text-lg bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">ID Único (slug) *</label>
+              <input type="text" id="game-id" placeholder="ej. smash_bros" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Nombre del Juego *</label>
+              <input type="text" id="game-name" placeholder="ej. Super Smash Bros" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Sistema de Puntuación</label>
+              <select id="game-scoring-type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <option value="points_high">Mayor puntuación gana (Mario Kart, Halo)</option>
+                <option value="placement">Por posición / llegada (1º, 2º, 3º)</option>
+                <option value="points_low">Menor puntuación gana (Golf, Tiempos)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Modos de Partida (Separados por coma)</label>
+            <input type="text" id="game-match-types" value="Partida Normal, Torneo" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button type="submit" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30">
+              Guardar Videojuego
+            </button>
+          </div>
+        </form>
       </div>
 
-      <div id="games-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-        <!-- Rendered dynamically -->
+      <!-- Games Grid -->
+      <div class="space-y-3">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Catálogo de Juegos Activos</h3>
+        <div id="games-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"></div>
       </div>
     </section>
 
@@ -320,51 +431,7 @@
 
 
   <!-- ===================================================================== -->
-  <!-- MODAL: NUEVA SESIÓN (style="display: none;" default protects clicks) -->
-  <!-- ===================================================================== -->
-  <div id="modal-session" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
-      <div class="flex items-center justify-between">
-        <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-          <span>⚔️</span> Iniciar Nueva Sesión
-        </h3>
-        <button onclick="closeModal('modal-session')" class="text-slate-400 hover:text-white text-2xl p-1 leading-none">&times;</button>
-      </div>
-
-      <form id="form-new-session" onsubmit="handleCreateSession(event)" class="space-y-3 sm:space-y-4">
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Videojuego</label>
-          <select id="session-game-select" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Título de la Sesión</label>
-          <input type="text" id="session-title" placeholder="ej. Viernes de Mario Kart" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Jugadores Participantes</label>
-          <div id="session-players-checkboxes" class="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-2 bg-slate-950/50 rounded-xl border border-slate-800">
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Notas Opcionales</label>
-          <input type="text" id="session-notes" placeholder="ej. En casa de Ricardo" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="closeModal('modal-session')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-medium">Cancelar</button>
-          <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30">Crear Sesión</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-
-  <!-- ===================================================================== -->
-  <!-- MODAL: REGISTRAR PARTIDA                                             -->
+  <!-- MODAL / INLINE DRAWER: REGISTRAR PARTIDA                             -->
   <!-- ===================================================================== -->
   <div id="modal-match" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
@@ -432,103 +499,6 @@
         <div class="flex justify-end space-x-2 pt-2">
           <button type="button" onclick="closeModal('modal-match')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-medium">Cancelar</button>
           <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30">Guardar Partida</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-
-  <!-- ===================================================================== -->
-  <!-- MODAL: NUEVO JUGADOR                                                 -->
-  <!-- ===================================================================== -->
-  <div id="modal-player" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
-      <div class="flex items-center justify-between">
-        <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-          <span>👤</span> Dar de Alta Jugador
-        </h3>
-        <button onclick="closeModal('modal-player')" class="text-slate-400 hover:text-white text-2xl p-1 leading-none">&times;</button>
-      </div>
-
-      <form id="form-new-player" onsubmit="handleCreatePlayer(event)" class="space-y-3.5">
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Nombre Completo</label>
-          <input type="text" id="player-name" placeholder="ej. Ricardo" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Gamertag / Apodo</label>
-          <input type="text" id="player-nickname" placeholder="ej. TARS" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Color Distintivo</label>
-          <div class="flex items-center space-x-3">
-            <input type="color" id="player-color" value="#3b82f6" class="w-9 h-9 rounded-lg cursor-pointer bg-transparent border-0">
-            <span class="text-xs text-slate-400">Color para avatar y gráficas</span>
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Foto o Avatar (Opcional)</label>
-          <input type="file" id="player-avatar-file" accept="image/*" class="w-full text-xs text-slate-400 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-indigo-400 hover:file:bg-slate-700">
-        </div>
-
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="closeModal('modal-player')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-medium">Cancelar</button>
-          <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30">Registrar</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-
-  <!-- ===================================================================== -->
-  <!-- MODAL: AGREGAR JUEGO                                                  -->
-  <!-- ===================================================================== -->
-  <div id="modal-game" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
-      <div class="flex items-center justify-between">
-        <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-          <span>🎮</span> Agregar Videojuego al Catálogo
-        </h3>
-        <button onclick="closeModal('modal-game')" class="text-slate-400 hover:text-white text-2xl p-1 leading-none">&times;</button>
-      </div>
-
-      <form id="form-new-game" onsubmit="handleCreateGame(event)" class="space-y-3.5">
-        <div class="grid grid-cols-3 gap-2.5">
-          <div class="col-span-1">
-            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Icono</label>
-            <input type="text" id="game-icon" value="🎮" required class="w-full text-center text-lg bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-          </div>
-          <div class="col-span-2">
-            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">ID Único (slug)</label>
-            <input type="text" id="game-id" placeholder="ej. halo_infinite" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Nombre del Juego</label>
-          <input type="text" id="game-name" placeholder="ej. Halo Infinite" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Puntuación</label>
-          <select id="game-scoring-type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-            <option value="points_high">Mayor puntuación gana (Mario Kart, Halo)</option>
-            <option value="placement">Por posición (1º, 2º, 3º)</option>
-            <option value="points_low">Menor puntuación gana (Golf, Tiempos)</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Modos de Partida</label>
-          <input type="text" id="game-match-types" value="Partida Regular, Torneo" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="closeModal('modal-game')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-medium">Cancelar</button>
-          <button type="submit" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30">Guardar</button>
         </div>
       </form>
     </div>
