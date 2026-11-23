@@ -568,6 +568,36 @@ def trigger_session_finished_automations(session_id: int):
             print(f"[EmailService] Error executing automation '{auto.get('name')}': {e}")
 
 
+def format_rule_chip(k: str, v: Any) -> str:
+    """Format game settings/rules into styled visual chips with relevant gaming icons."""
+    k_lower = str(k).lower()
+    v_str = str(v)
+    accent = False
+    icon = "⚙️"
+    if "clase" in k_lower or "cc" in v_str.lower():
+        icon = "⚡"
+        accent = True
+    elif "carrera" in k_lower or "vuelta" in k_lower:
+        icon = "🏁"
+        accent = True
+    elif "vehiculo" in k_lower or "kart" in k_lower or "auto" in k_lower:
+        icon = "🏎️"
+    elif "cpu" in k_lower or "bot" in k_lower or "ia" in k_lower:
+        icon = "🤖"
+    elif "objeto" in k_lower or "item" in k_lower:
+        icon = "🍌"
+    elif "pista" in k_lower or "circuito" in k_lower or "map" in k_lower:
+        icon = "🗺️"
+    elif "equipo" in k_lower or "team" in k_lower:
+        icon = "👥"
+
+    bg = "rgba(99, 102, 241, 0.15)" if accent else "#131f3b"
+    border = "rgba(99, 102, 241, 0.35)" if accent else "#1e293b"
+    text_color = "#a5b4fc" if accent else "#94a3b8"
+
+    return f'<span style="display: inline-block; background-color: {bg}; border: 1px solid {border}; border-radius: 6px; padding: 2px 7px; margin: 2px 3px; font-size: 10px; font-weight: 500; color: {text_color}; white-space: nowrap;">{icon} {v_str}</span>'
+
+
 def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> tuple:
     """Render HTML and plain text for session summary according to template flags."""
     standings_rows = ""
@@ -579,19 +609,23 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
         second = standings[1] if len(standings) > 1 else None
         third = standings[2] if len(standings) > 2 else None
 
+        p1_score = int(first["total_score"]) if first and first["total_score"] == int(first["total_score"]) else (first["total_score"] if first else 0)
+        p2_score = int(second["total_score"]) if second and second["total_score"] == int(second["total_score"]) else (second["total_score"] if second else 0)
+        p3_score = int(third["total_score"]) if third and third["total_score"] == int(third["total_score"]) else (third["total_score"] if third else 0)
+
         podium_html = f"""
         <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 14px; padding: 16px; margin-bottom: 20px; text-align: center;">
           <h4 style="color: #fbbf24; font-size: 13px; text-transform: uppercase; margin: 0 0 12px 0;">👑 Podio de Honor 👑</h4>
           <table border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
               <td style="width: 33%; text-align: center; vertical-align: bottom; padding: 8px;">
-                {f'<div style="font-size: 20px;">🥈</div><strong style="color: #cbd5e1; font-size: 13px; display: block;">{second["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{second["total_score"]} pts</span>' if second else ''}
+                {f'<div style="font-size: 20px;">🥈</div><strong style="color: #cbd5e1; font-size: 13px; display: block;">{second["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{p2_score} pts</span>' if second else ''}
               </td>
               <td style="width: 34%; text-align: center; vertical-align: bottom; padding: 8px; border-left: 1px solid #1e293b; border-right: 1px solid #1e293b;">
-                {f'<div style="font-size: 28px;">🥇</div><strong style="color: #fbbf24; font-size: 15px; display: block;">{first["name"]}</strong><span style="color: #fde68a; font-size: 12px; font-weight: bold;">{first["total_score"]} pts ({first["wins"]} vic.)</span>' if first else ''}
+                {f'<div style="font-size: 28px;">🥇</div><strong style="color: #fbbf24; font-size: 15px; display: block;">{first["name"]}</strong><span style="color: #fde68a; font-size: 12px; font-weight: bold;">{p1_score} pts ({first["wins"]} vic.)</span>' if first else ''}
               </td>
               <td style="width: 33%; text-align: center; vertical-align: bottom; padding: 8px;">
-                {f'<div style="font-size: 20px;">🥉</div><strong style="color: #d97706; font-size: 13px; display: block;">{third["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{third["total_score"]} pts</span>' if third else ''}
+                {f'<div style="font-size: 20px;">🥉</div><strong style="color: #d97706; font-size: 13px; display: block;">{third["name"]}</strong><span style="color: #94a3b8; font-size: 11px;">{p3_score} pts</span>' if third else ''}
               </td>
             </tr>
           </table>
@@ -601,6 +635,7 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
     if template.get("include_standings"):
         for idx, st in enumerate(standings, start=1):
             medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}º"))
+            st_score = int(st["total_score"]) if st["total_score"] == int(st["total_score"]) else st["total_score"]
             standings_rows += f"""
             <tr style="border-bottom: 1px solid #1e293b;">
               <td style="padding: 10px 12px; font-weight: bold; font-size: 14px; text-align: center; color: #fbbf24;">{medal}</td>
@@ -610,25 +645,85 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
               </td>
               <td style="padding: 10px 12px; text-align: center; color: #10b981; font-weight: bold;">{st['wins']}</td>
               <td style="padding: 10px 12px; text-align: center; color: #94a3b8;">{st['matches_played']}</td>
-              <td style="padding: 10px 12px; text-align: right; color: #fbbf24; font-weight: 800; font-size: 15px;">{st['total_score']} pts</td>
+              <td style="padding: 10px 12px; text-align: right; color: #fbbf24; font-weight: 800; font-size: 15px;">{st_score} pts</td>
             </tr>
             """
 
     matches_html = ""
     if template.get("include_matches"):
         for m in session.get("matches", []):
-            type_badge = "Práctica" if m.get("is_practice") else "Oficial"
-            scores_parts = []
+            is_practice = bool(m.get("is_practice"))
+            type_badge = "Práctica" if is_practice else "Oficial"
+            badge_style = "background-color: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24;" if is_practice else "background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399;"
+
+            # Visual chips for rules
+            rule_chips = []
+            for k, v in m.get("rule_values", {}).items():
+                if v:
+                    rule_chips.append(format_rule_chip(k, v))
+            rules_html = f'<div style="padding: 8px 12px 10px 12px; background-color: #0b1329;">{" ".join(rule_chips)}</div>' if rule_chips else ""
+
+            # Player scores mini-table
+            scores_rows_html = ""
             for sc in m.get("scores", []):
-                char_str = f" · {sc['metrics'].get('character')}" if (template.get("include_metrics") and sc.get("metrics") and sc["metrics"].get("character")) else ""
-                scores_parts.append(f"<strong>{sc['player_nickname'] or sc['player_name']}</strong> ({sc['rank_position']}º - {sc['score']} pts{char_str})")
-            scores_line = ", ".join(scores_parts)
-            rules_line = " · ".join([f"{k}: {v}" for k, v in m.get("rule_values", {}).items()])
+                rank = sc.get("rank_position", 1)
+                medal = "🥇" if rank == 1 else ("🥈" if rank == 2 else ("🥉" if rank == 3 else f"{rank}º"))
+
+                sc_val = sc.get("score", 0)
+                formatted_score = int(sc_val) if sc_val == int(sc_val) else sc_val
+
+                # Character / Kart badge
+                char_badge = ""
+                if template.get("include_metrics") and sc.get("metrics"):
+                    char_name = sc["metrics"].get("character")
+                    kart_name = sc["metrics"].get("kart")
+                    if char_name:
+                        char_text = f"🏎️ {char_name}" + (f" · {kart_name}" if kart_name else "")
+                        char_badge = f'<span style="display: inline-block; margin-left: 8px; background-color: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 600; color: #a5b4fc;">{char_text}</span>'
+
+                nick_str = f'<span style="color: #64748b; font-size: 11px; margin-left: 4px;">@{sc["player_nickname"]}</span>' if sc.get("player_nickname") else ""
+                rank_color = "#fbbf24" if rank == 1 else ("#cbd5e1" if rank == 2 else ("#d97706" if rank == 3 else "#94a3b8"))
+                score_color = "#fbbf24" if rank == 1 else "#f8fafc"
+                row_bg = "background-color: rgba(251, 191, 36, 0.04);" if rank == 1 else ""
+
+                scores_rows_html += f"""
+                <tr style="border-top: 1px solid #14203d; {row_bg}">
+                  <td style="padding: 9px 12px; width: 44px; text-align: center; font-weight: bold; font-size: {'15px' if rank <= 3 else '12px'}; color: {rank_color};">
+                    {medal}
+                  </td>
+                  <td style="padding: 9px 8px; text-align: left;">
+                    <strong style="color: #ffffff; font-size: 13px;">{sc['player_name']}</strong>
+                    {nick_str}
+                    {char_badge}
+                  </td>
+                  <td style="padding: 9px 14px; text-align: right; width: 90px;">
+                    <strong style="color: {score_color}; font-size: 13px; font-weight: 800;">{formatted_score}</strong>
+                    <span style="color: #64748b; font-size: 10px;">pts</span>
+                  </td>
+                </tr>
+                """
+
             matches_html += f"""
-            <div style="background-color: #090d16; border: 1px solid #1e293b; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;">
-              <div style="color: #818cf8; font-weight: bold; font-size: 12px; margin-bottom: 4px;">Partida #{m['match_number']} ({m['match_type']}) [{type_badge}]</div>
-              {f'<div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px;">{rules_line}</div>' if rules_line else ''}
-              <div style="color: #e2e8f0; font-size: 12px;">{scores_line}</div>
+            <div style="background-color: #0b1329; border: 1px solid #1e293b; border-radius: 14px; margin-bottom: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0f1b38; border-bottom: 1px solid #1e293b;">
+                <tr>
+                  <td style="padding: 10px 14px;">
+                    <span style="color: #ffffff; font-weight: 800; font-size: 13px;">🏁 Partida #{m['match_number']}</span>
+                    <span style="color: #818cf8; font-size: 11px; margin-left: 6px;">({m.get('match_type', 'Partida')})</span>
+                  </td>
+                  <td style="padding: 10px 14px; text-align: right;">
+                    <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700; text-transform: uppercase; {badge_style}">
+                      {type_badge}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+              {rules_html}
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tbody>
+                  {scores_rows_html}
+                </tbody>
+              </table>
             </div>
             """
 
