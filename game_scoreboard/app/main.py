@@ -1,12 +1,10 @@
 import os
 from pathlib import Path
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 
-from contextlib import asynccontextmanager
 from database import init_db, AVATARS_DIR
 from routers import games, players, sessions, stats, backup
 
@@ -25,7 +23,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Game Scoreboard Add-on",
     description="Scoreboard nativo de videojuegos para Home Assistant",
-    version="1.0.0",
+    version="1.0.3",
     lifespan=lifespan
 )
 
@@ -37,19 +35,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-class IngressMiddleware(BaseHTTPMiddleware):
-    """Detects Home Assistant Ingress header (X-Ingress-Path) and adjusts request root_path."""
-    async def dispatch(self, request: Request, call_next):
-        ingress_path = request.headers.get("X-Ingress-Path", "")
-        if ingress_path:
-            request.scope["root_path"] = ingress_path
-        response = await call_next(request)
-        return response
-
-
-app.add_middleware(IngressMiddleware)
 
 # Include Routers
 app.include_router(games.router)
@@ -69,14 +54,21 @@ async def serve_avatar(filename: str):
     file_path = AVATARS_DIR / filename
     if file_path.exists() and file_path.is_file():
         return FileResponse(str(file_path))
-    # Return placeholder or 404
     return HTMLResponse(status_code=404, content="Avatar not found")
 
 
-# Mount static assets
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-
+# Serve static assets directly without Mount prefix collisions
+@app.get("/static/{file_path:path}")
+async def serve_static(file_path: str):
+    target = STATIC_DIR / file_path
+    if target.exists() and target.is_file():
+        # Set proper Content-Type
+        if file_path.endswith(".js"):
+            return FileResponse(str(target), media_type="application/javascript")
+        if file_path.endswith(".css"):
+            return FileResponse(str(target), media_type="text/css")
+        return FileResponse(str(target))
+    return HTMLResponse(status_code=404, content="Static asset not found")
 
 
 @app.get("/", response_class=HTMLResponse)
