@@ -2,10 +2,65 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import List, Dict, Any, Optional
 import json
 from database import get_db_connection, get_match_race_count
-from models import SessionCreate, SessionUpdate, MatchCreate
+from models import SessionCreate, SessionUpdate, MatchCreate, MatchScoreInput
 from email_service import trigger_session_finished_automations
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+
+def _sync_scores_from_races(match_data: MatchCreate):
+    """If race-by-race data is provided, sum points per player and sync match_data.scores."""
+    if not match_data.races:
+        return
+
+    race_totals: Dict[int, float] = {}
+    for r in match_data.races:
+        for rs in r.scores:
+            race_totals[rs.player_id] = round(race_totals.get(rs.player_id, 0.0) + rs.points, 1)
+
+    existing_by_pid = {sc.player_id: sc for sc in match_data.scores}
+    synced_scores = []
+    for pid, total_pts in race_totals.items():
+        if pid in existing_by_pid:
+            sc = existing_by_pid[pid]
+            sc.score = total_pts
+            synced_scores.append(sc)
+        else:
+            synced_scores.append(MatchScoreInput(player_id=pid, score=total_pts, rank_position=1, metrics={}))
+
+    # Include any score entries not in race_totals
+    for pid, sc in existing_by_pid.items():
+        if pid not in race_totals:
+            synced_scores.append(sc)
+
+    match_data.scores = synced_scores
+    if match_data.rule_values is None:
+        match_data.rule_values = {}
+    match_data.rule_values["carreras"] = f"{len(match_data.races)} carreras"
+
+
+def _persist_match_races(cursor, match_id: int, match_data: MatchCreate):
+    """Persist individual races and race scores for a match."""
+    if not match_data.races:
+        return
+
+    cursor.execute("DELETE FROM match_races WHERE match_id = ?", (match_id,))
+    default_class = (match_data.rule_values or {}).get("clase", "")
+
+    for idx, r in enumerate(match_data.races, start=1):
+        r_num = r.race_number or idx
+        c_mode = r.class_mode or default_class
+        cursor.execute("""
+        INSERT INTO match_races (match_id, race_number, cup_name, track_name, class_mode)
+        VALUES (?, ?, ?, ?, ?)
+        """, (match_id, r_num, r.cup_name or "", r.track_name, c_mode))
+        race_id = cursor.lastrowid
+
+        for rs in r.scores:
+            cursor.execute("""
+            INSERT INTO match_race_scores (race_id, match_id, player_id, position, points)
+            VALUES (?, ?, ?, ?, ?)
+            """, (race_id, match_id, rs.player_id, rs.position, rs.points))
 
 
 @router.get("", response_model=List[Dict[str, Any]])
@@ -105,7 +160,47 @@ def get_session(session_id: int):
     for m in matches_rows:
         match_id = m["id"]
         rule_values = json.loads(m["rule_values_json"] or "{}")
-        match_races = get_match_race_count(rule_values, m["match_type"])
+
+        # Fetch recorded races for this match
+        cursor.execute("""
+        SELECT * FROM match_races WHERE match_id = ? ORDER BY race_number ASC, id ASC
+        """, (match_id,))
+        race_rows = cursor.fetchall()
+        races_list = []
+        running_totals = {}
+        for r_row in race_rows:
+            r_id = r_row["id"]
+            cursor.execute("""
+            SELECT mrs.*, p.name AS player_name, p.nickname AS player_nickname, p.color_hex
+            FROM match_race_scores mrs
+            JOIN players p ON mrs.player_id = p.id
+            WHERE mrs.race_id = ?
+            ORDER BY mrs.position ASC
+            """, (r_id,))
+            r_scores = []
+            for rs in cursor.fetchall():
+                pid = rs["player_id"]
+                pts = rs["points"]
+                running_totals[pid] = round(running_totals.get(pid, 0.0) + pts, 1)
+                r_scores.append({
+                    "player_id": pid,
+                    "player_name": rs["player_name"],
+                    "player_nickname": rs["player_nickname"] or "",
+                    "color_hex": rs["color_hex"],
+                    "position": rs["position"],
+                    "points": pts,
+                    "cumulative_points": running_totals[pid]
+                })
+            races_list.append({
+                "id": r_id,
+                "race_number": r_row["race_number"],
+                "cup_name": r_row["cup_name"] or "",
+                "track_name": r_row["track_name"],
+                "class_mode": r_row["class_mode"] or rule_values.get("clase", ""),
+                "scores": r_scores
+            })
+
+        match_races = get_match_race_count(rule_values, m["match_type"], len(races_list))
 
         cursor.execute("""
         SELECT ms.*, p.name AS player_name, p.nickname AS player_nickname, p.avatar_url, p.color_hex
@@ -155,7 +250,8 @@ def get_session(session_id: int):
             "is_practice": bool(m["is_practice"]),
             "notes": m["notes"] or "",
             "played_at": str(m["played_at"]),
-            "scores": scores
+            "scores": scores,
+            "races": races_list
         })
 
     # Build standings list
@@ -290,8 +386,10 @@ def update_match(match_id: int, match_data: MatchCreate):
     game_name = (existing["game_name"] or "").lower()
     is_mario_kart = "mario_kart" in game_id or "mario kart" in game_name or "mariokart" in game_id
 
+    _sync_scores_from_races(match_data)
+
     # Auto-rank Mario Kart matches by score descending
-    if is_mario_kart and match_data.scores:
+    if (is_mario_kart or match_data.races) and match_data.scores:
         match_data.scores.sort(key=lambda s: s.score, reverse=True)
         for rank_idx, sc in enumerate(match_data.scores, start=1):
             sc.rank_position = rank_idx
@@ -331,6 +429,8 @@ def update_match(match_id: int, match_data: MatchCreate):
         VALUES (?, ?)
         """, (session_id, sc.player_id))
 
+    _persist_match_races(cursor, match_id, match_data)
+
     conn.commit()
     conn.close()
     return get_session(session_id)
@@ -356,8 +456,10 @@ def add_match(session_id: int, match_data: MatchCreate):
     game_name = (session_row["game_name"] or "").lower()
     is_mario_kart = "mario_kart" in game_id or "mario kart" in game_name or "mariokart" in game_id
 
+    _sync_scores_from_races(match_data)
+
     # Auto-rank Mario Kart matches by score descending
-    if is_mario_kart and match_data.scores:
+    if (is_mario_kart or match_data.races) and match_data.scores:
         match_data.scores.sort(key=lambda s: s.score, reverse=True)
         for rank_idx, sc in enumerate(match_data.scores, start=1):
             sc.rank_position = rank_idx
@@ -397,6 +499,8 @@ def add_match(session_id: int, match_data: MatchCreate):
         INSERT OR IGNORE INTO session_players (session_id, player_id)
         VALUES (?, ?)
         """, (session_id, sc.player_id))
+
+    _persist_match_races(cursor, match_id, match_data)
 
     conn.commit()
     conn.close()

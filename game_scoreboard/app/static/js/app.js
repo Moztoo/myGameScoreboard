@@ -128,6 +128,15 @@ async function loadDashboard() {
       renderAdvancedStats(cachedTimelineData);
     }
 
+    // Load Track & Class Performance Analytics
+    let trkUrl = `/api/stats/tracks?include_practice=${includePractice}`;
+    if (selectedGame) trkUrl += `&game_id=${encodeURIComponent(selectedGame)}`;
+    const trkRes = await fetch(getApiUrl(trkUrl));
+    if (trkRes.ok) {
+      const trkData = await trkRes.json();
+      renderClassAndTrackAnalytics(trkData);
+    }
+
     // Load Recent Matches
     const rmRes = await fetch(getApiUrl('/api/stats/recent_matches?limit=8'));
     if (rmRes.ok) {
@@ -364,6 +373,132 @@ function renderAdvancedStats(data) {
       bestDetailEl.textContent = 'Mínimo 2 partidas para calcular racha';
     }
   }
+}
+
+let cachedTrackAnalyticsData = null;
+
+function renderClassAndTrackAnalytics(data) {
+  cachedTrackAnalyticsData = data || { track_stats: [], class_stats: [] };
+
+  // 1. Render Class Stats
+  const classEl = document.getElementById('dash-class-stats-list');
+  if (classEl) {
+    const classStats = cachedTrackAnalyticsData.class_stats || [];
+    if (classStats.length === 0) {
+      classEl.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Aún no hay partidas registradas por clase.</div>`;
+    } else {
+      classEl.innerHTML = classStats.map(c => {
+        const leader = c.leader;
+        const leaderHtml = leader
+          ? `<span class="font-bold text-amber-400">👑 ${leader.nickname || leader.name}</span> <span class="text-slate-400">(${leader.wins} vic · ${leader.total_points} pts)</span>`
+          : `<span class="text-slate-500">-</span>`;
+
+        const pillsHtml = (c.standings || []).slice(0, 4).map((p, idx) => `
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px]">
+            <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${p.color_hex}"></span>
+            <span class="text-slate-200 font-semibold">${idx + 1}º ${p.nickname}</span>
+            <span class="text-amber-400 font-bold">${p.total_points}p</span>
+          </span>
+        `).join('');
+
+        return `
+          <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-black text-xs">${c.class_mode}</span>
+                <span class="text-[11px] text-slate-400">${c.matches_count} part. · 🏁 ${c.races_count} carr.</span>
+              </div>
+              <div class="text-xs">${leaderHtml}</div>
+            </div>
+            <div class="flex flex-wrap gap-1.5">${pillsHtml}</div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // 2. Populate player filter for Track Analytics
+  const filterSelect = document.getElementById('dash-track-player-filter');
+  if (filterSelect) {
+    const currentVal = filterSelect.value;
+    const playerMap = new Map();
+    (cachedTrackAnalyticsData.track_stats || []).forEach(t => {
+      (t.players || []).forEach(p => {
+        if (!playerMap.has(p.player_id)) {
+          playerMap.set(p.player_id, p.nickname || p.name);
+        }
+      });
+    });
+    let opts = `<option value="">Todos los Jugadores (Rey de la Pista)</option>`;
+    playerMap.forEach((name, id) => {
+      opts += `<option value="${id}" ${String(id) === String(currentVal) ? 'selected' : ''}>Desempeño de: ${name}</option>`;
+    });
+    filterSelect.innerHTML = opts;
+  }
+
+  renderTrackAnalyticsTable();
+}
+
+function renderTrackAnalyticsTable() {
+  const tbody = document.getElementById('dash-track-stats-body');
+  if (!tbody) return;
+  const trackStats = (cachedTrackAnalyticsData && cachedTrackAnalyticsData.track_stats) || [];
+  const filterSelect = document.getElementById('dash-track-player-filter');
+  const selectedPlayerId = filterSelect ? filterSelect.value : '';
+
+  if (trackStats.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">Registra carreras en Modo Captura para ver estadísticas por pista y copa.</td></tr>`;
+    return;
+  }
+
+  let rowsData = [];
+  if (selectedPlayerId) {
+    const pid = Number(selectedPlayerId);
+    trackStats.forEach(t => {
+      const pEntry = (t.players || []).find(p => p.player_id === pid);
+      if (pEntry) {
+        rowsData.push({
+          track_name: t.track_name,
+          cup_name: t.cup_name,
+          times_played: pEntry.races,
+          player: pEntry
+        });
+      }
+    });
+    rowsData.sort((a, b) => (a.player.avg_position - b.player.avg_position) || (b.player.wins - a.player.wins));
+  } else {
+    rowsData = trackStats.map(t => ({
+      track_name: t.track_name,
+      cup_name: t.cup_name,
+      times_played: t.times_played,
+      player: t.best_player
+    }));
+  }
+
+  if (rowsData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">Sin carreras registradas para este jugador.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rowsData.map(r => {
+    const p = r.player;
+    const playerBadge = p
+      ? `<span class="inline-flex items-center gap-1.5 font-bold text-white"><span class="w-2 h-2 rounded-full" style="background-color: ${p.color_hex}"></span>${p.nickname || p.name}</span>`
+      : '-';
+    return `
+      <tr class="hover:bg-slate-800/40 transition">
+        <td class="py-2 px-3">
+          <div class="font-bold text-white text-xs">${r.track_name}</div>
+          ${r.cup_name ? `<div class="text-[10px] text-slate-400">${r.cup_name}</div>` : ''}
+        </td>
+        <td class="py-2 px-2 text-center font-semibold text-sky-400">${r.times_played}</td>
+        <td class="py-2 px-3">${playerBadge}</td>
+        <td class="py-2 px-2 text-center font-bold text-emerald-400">${p ? p.wins : 0} 🥇</td>
+        <td class="py-2 px-2 text-center font-mono text-slate-300">${p ? p.avg_position + 'º' : '-'}</td>
+        <td class="py-2 px-3 text-right font-black text-amber-400">${p ? p.avg_points + ' pts' : '-'}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function renderPodium(leaderboard) {
@@ -714,6 +849,51 @@ function renderSessionDetail(s) {
           </tr>
         `).join('');
 
+        let racesDetailHtml = '';
+        if (m.races && m.races.length > 0) {
+          const raceRowsHtml = m.races.map(r => {
+            const pBadges = (r.scores || []).map(rs => {
+              const medal = rs.position === 1 ? '🥇' : rs.position === 2 ? '🥈' : rs.position === 3 ? '🥉' : `${rs.position}º`;
+              return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px]">
+                <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${rs.color_hex || '#6366f1'}"></span>
+                <strong class="text-white">${rs.player_nickname || rs.player_name}</strong>:
+                <span class="text-indigo-300 font-bold">${medal}</span>
+                <span class="text-amber-400 font-semibold">(+${rs.points})</span>
+              </span>`;
+            }).join('');
+
+            return `
+              <div class="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span class="text-[11px] font-black text-sky-400">Carrera #${r.race_number}</span>
+                  <span class="text-xs font-bold text-white ml-1.5">${r.track_name}</span>
+                  ${r.cup_name ? `<span class="text-[10px] text-slate-400 ml-1">(${r.cup_name})</span>` : ''}
+                </div>
+                <div class="flex flex-wrap gap-1.5">${pBadges}</div>
+              </div>
+            `;
+          }).join('');
+
+          racesDetailHtml = `
+            <div class="pt-2 border-t border-slate-800/70">
+              <button type="button" onclick="toggleMatchBurndownPanel(${m.id})" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5">
+                <span>📈</span> Ver Burndown de la Copa y Desglose por Pista (${m.races.length} carreras)
+              </button>
+              <div id="match-burndown-panel-${m.id}" class="hidden mt-3 space-y-3">
+                <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Evolución de Puntos Carrera a Carrera (Burndown)</div>
+                  <div class="relative w-full h-48">
+                    <canvas id="match-burndown-canvas-${m.id}"></canvas>
+                  </div>
+                </div>
+                <div class="space-y-1.5">
+                  ${raceRowsHtml}
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
         return `
           <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
@@ -743,6 +923,8 @@ function renderSessionDetail(s) {
                 </tbody>
               </table>
             </div>
+
+            ${racesDetailHtml}
 
             ${m.notes ? `<div class="text-[11px] text-slate-400 italic">Notas: ${m.notes}</div>` : ''}
           </div>
@@ -968,7 +1150,7 @@ async function handleCreateSession(e) {
 }
 
 // -----------------------------------------------------------------------------
-// RECORD & EDIT MATCH MODAL (DYNAMIC MARIO KART 8 / RULES & PLAYER CONFIG)
+// RECORD & EDIT MATCH MODAL + DYNAMIC RULES + MODO CAPTURA (CARRERA POR CARRERA)
 // -----------------------------------------------------------------------------
 let currentRecordingSession = null;
 let currentEditingMatchId = null;
@@ -976,12 +1158,95 @@ let currentSelectedPlayerIds = new Set();
 let currentMatchGame = null;
 let currentGameMetricsDef = null;
 let currentGameDefaultPoints = [15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+let currentRuleDraftValues = {};
+let showManualScoresInConfig = false;
+let postMatchBurndownChartInstance = null;
+const sessionMatchBurndownCharts = {};
+
+// Official Mario Kart 8 Deluxe 24 Cups (96 Tracks) + Battle Stages Catalog
+const MK8_CUPS_CATALOG = [
+  { cup: "🍄 Copa Champiñón", tracks: ["Estadio Mario Kart", "Parque Acuático", "Barranco Goloso", "Ruinas Roca Picuda"] },
+  { cup: "🌸 Copa Flor", tracks: ["Circuito Mario", "Puerto Toad", "Mansión Retorcida", "Cataratas Shy Guy"] },
+  { cup: "⭐ Copa Estrella", tracks: ["Aeropuerto Soleado", "Cala Delfín", "Electródromo", "Cumbre Wario"] },
+  { cup: "👑 Copa Especial", tracks: ["Ruta Celeste", "Desierto Seco-Seco", "Castillo de Bowser", "Senda Arco Iris"] },
+  { cup: "🐢 Copa Caparazón", tracks: ["Wii Pradera Mu-Mu", "GBA Circuito Mario", "DS Playa Cheep Cheep", "N64 Autopista de Toad"] },
+  { cup: "🍌 Copa Plátano", tracks: ["GCN Desierto Seco-Seco", "SNES Prado Rosquilla 3", "N64 Pista Real", "3DS Jungla DK"] },
+  { cup: "🍂 Copa Hoja", tracks: ["DS Estadio Wario", "GCN Tierra Sorbete", "3DS Autopista Musical", "N64 Valle de Yoshi"] },
+  { cup: "⚡ Copa Centella", tracks: ["DS Reloj Tictac", "3DS Tuberías Planta Piraña", "Wii Volcán Gruñón", "N64 Senda Arco Iris"] },
+  { cup: "🥚 Copa Huevo", tracks: ["GCN Circuito Yoshi", "Estadio Excitebike", "Ruta Dragón", "Mute City"] },
+  { cup: "🗡️ Copa Trifuerza", tracks: ["Wii Mina de Wario", "SNES Senda Arco Iris", "Estación Glaciar", "Circuito de Hyrule"] },
+  { cup: "🍃 Copa Crossing", tracks: ["GCN Parque Bebé", "GBA Tierra de Queso", "Bosque Mágico", "Animal Crossing"] },
+  { cup: "🔔 Copa Campana", tracks: ["3DS Ciudad Koopa", "GBA Ruta del Lazo", "Metro Campana", "Big Blue"] },
+  { cup: "🪙 Copa Turbo Dorada", tracks: ["Tour Bulevares de París", "3DS Circuito Toad", "N64 Monte Chocolate", "Wii Centro Cocotero"] },
+  { cup: "🐱 Copa Felina Fortuna", tracks: ["Tour Circuito de Tokio", "DS Colinas Champiñón", "GBA Jardín Celeste", "Mansión Ninja"] },
+  { cup: "🥕 Copa Nabo", tracks: ["Tour Visita a Nueva York", "SNES Circuito Mario 3", "N64 Desierto Kalimari", "DS Pinball Waluigi"] },
+  { cup: "🚁 Copa Hélice", tracks: ["Tour Sídney sin Pausa", "GBA Tierra Nevada", "Wii Barranco Champiñón", "Cielos Helados"] },
+  { cup: "🪨 Copa Roca", tracks: ["Tour Ronda por Londres", "GBA Lago de Boo", "3DS Montaña Roqui-Roque", "Wii Camino Forestal"] },
+  { cup: "🌙 Copa Luna", tracks: ["Tour Berlín de Vértigo", "DS Jardín de Peach", "Aldea de los Regalos", "3DS Senda Arco Iris"] },
+  { cup: "🍎 Copa Fruta", tracks: ["Tour Derrapes en Ámsterdam", "GBA Parque de la Ribera", "Wii Cumbre DK", "Isla de Yoshi"] },
+  { cup: "🪃 Copa Bumerán", tracks: ["Tour Atardecer en Bangkok", "DS Circuito Mario", "GCN Estadio Waluigi", "Tour Acelerón en Singapur"] },
+  { cup: "🪶 Copa Pluma", tracks: ["Tour Periplo Ateniense", "GCN Crucero Daisy", "Wii Circuito Luz de Luna", "Bañódromo"] },
+  { cup: "🍒 Copa Cereza", tracks: ["Tour A Todo Gas en Los Ángeles", "GBA Reserva Natural del Poniente", "Wii Colina de Koopa", "Tour Vuelta por Vancouver"] },
+  { cup: "🌰 Copa Bellota", tracks: ["Tour Roma Bajo la Luna", "GCN Montaña DK", "Wii Circuito de Daisy", "Ruinas Planta Piraña"] },
+  { cup: "💙 Copa Picos", tracks: ["Tour Paseo por Madrid", "3DS Glaciar de Rosalina", "SNES Castillo de Bowser 3", "Wii Senda Arco Iris"] },
+  { cup: "🎈 Escenarios Batalla", tracks: ["Estadio de Batalla", "Cielo Azucarado", "Palacio Dragón", "Estación Lunar", "3DS Wuhu Pueblo", "GCN Mansión de Luigi", "SNES Circuito de Batalla 1", "Parque Viaducto"] }
+];
+
+let captureState = {
+  totalRaces: 4,
+  currentRaceIdx: 0,
+  matchType: "",
+  ruleValues: {},
+  isPractice: false,
+  notes: "",
+  playerMetrics: {},
+  isAutoCup: false,
+  selectedCupTab: "🍄 Copa Champiñón",
+  showTrackPicker: true,
+  searchQuery: "",
+  races: []
+};
 
 function isMarioKartGame(game) {
   if (!game) return false;
   const id = (game.id || '').toLowerCase();
   const name = (game.name || '').toLowerCase();
   return id.includes('mario_kart') || id.includes('mariokart') || name.includes('mario kart');
+}
+
+function getPointsForPosition(position) {
+  const pos = parseInt(position, 10);
+  if (!pos || pos < 1) return 0;
+  if (currentGameDefaultPoints && currentGameDefaultPoints[pos - 1] !== undefined) {
+    return Number(currentGameDefaultPoints[pos - 1]);
+  }
+  const mkFallback = [15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+  return mkFallback[pos - 1] !== undefined ? mkFallback[pos - 1] : 1;
+}
+
+function showMatchModalStep(stepName) {
+  const sConfig = document.getElementById('match-step-config');
+  const sCapture = document.getElementById('match-step-capture');
+  const sFinished = document.getElementById('match-step-finished');
+  if (sConfig) sConfig.classList.toggle('hidden', stepName !== 'config');
+  if (sCapture) sCapture.classList.toggle('hidden', stepName !== 'capture');
+  if (sFinished) sFinished.classList.toggle('hidden', stepName !== 'finished');
+}
+
+function toggleManualScoreTable(forceState = null) {
+  if (forceState !== null) {
+    showManualScoresInConfig = Boolean(forceState);
+  } else {
+    showManualScoresInConfig = !showManualScoresInConfig;
+  }
+  const cols = document.querySelectorAll('.manual-score-col');
+  cols.forEach(c => c.classList.toggle('hidden', !showManualScoresInConfig));
+  const btn = document.getElementById('btn-toggle-manual-scores');
+  if (btn) {
+    btn.textContent = showManualScoresInConfig
+      ? 'Ocultar Puntaje Manual (Usar Modo Captura)'
+      : 'Mostrar / Editar Puntaje Final Directo';
+  }
 }
 
 function autoRankMarioKartScores() {
@@ -997,7 +1262,6 @@ function autoRankMarioKartScores() {
     });
   });
 
-  // Sort descending by score (highest points = 1st place)
   playerScores.sort((a, b) => b.score - a.score);
 
   playerScores.forEach((item, idx) => {
@@ -1032,6 +1296,13 @@ function toggleAllMatchParticipants(selectAll) {
 function updateMatchParticipantsUI(existingScoresMap = null) {
   if (!currentRecordingSession) return;
 
+  // Preserve current character selection before re-rendering
+  const preservedMetrics = {};
+  currentRecordingSession.players.forEach(p => {
+    const mEl = document.querySelector(`[name="metric_${p.id}"]`);
+    if (mEl && mEl.value) preservedMetrics[p.id] = mEl.value;
+  });
+
   const countBadge = document.getElementById('match-participants-count');
   if (countBadge) {
     const total = currentRecordingSession.players.length;
@@ -1044,14 +1315,9 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
 
   const isMK = isMarioKartGame(currentMatchGame);
 
-  // Toggle Mario Kart auto-ranking banner in modal
   const autoRankBanner = document.getElementById('mk-auto-rank-banner');
   if (autoRankBanner) {
-    if (isMK) {
-      autoRankBanner.classList.remove('hidden');
-    } else {
-      autoRankBanner.classList.add('hidden');
-    }
+    autoRankBanner.classList.toggle('hidden', !isMK || !showManualScoresInConfig);
   }
 
   const selectedPlayers = currentRecordingSession.players.filter(p => currentSelectedPlayerIds.has(p.id));
@@ -1061,15 +1327,17 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
     return;
   }
 
+  const hiddenClass = showManualScoresInConfig ? '' : 'hidden';
+
   scoresBody.innerHTML = selectedPlayers.map((p, idx) => {
     let rankVal = idx + 1;
     let scoreVal = currentGameDefaultPoints[idx] !== undefined ? currentGameDefaultPoints[idx] : 0;
-    let metricVal = '';
+    let metricVal = preservedMetrics[p.id] || '';
 
     if (existingScoresMap && existingScoresMap[p.id]) {
       rankVal = existingScoresMap[p.id].rank_position;
       scoreVal = existingScoresMap[p.id].score;
-      metricVal = existingScoresMap[p.id].metrics?.character || existingScoresMap[p.id].metrics?.kart || '';
+      metricVal = existingScoresMap[p.id].metrics?.character || existingScoresMap[p.id].metrics?.kart || metricVal;
     }
 
     let metricInput = `<input type="text" name="metric_${p.id}" value="${metricVal}" placeholder="ej. Mario / Yoshi" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">`;
@@ -1080,12 +1348,10 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
       metricInput = `<select name="metric_${p.id}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">${opts}</select>`;
     }
 
-    // Rank input: readonly if Mario Kart (auto-ranked), editable if other game
     const rankInputHtml = isMK
-      ? `<input type="number" name="rank_${p.id}" value="${rankVal}" readonly class="w-full text-center bg-slate-900/90 border border-indigo-500/30 rounded-lg px-2 py-1 text-xs text-indigo-300 font-black cursor-default select-none focus:outline-none" title="Calculado automáticamente por puntaje">`
+      ? `<input type="number" name="rank_${p.id}" value="${rankVal}" readonly class="w-full text-center bg-slate-900/90 border border-indigo-500/30 rounded-lg px-2 py-1 text-xs text-indigo-300 font-black cursor-default select-none focus:outline-none">`
       : `<input type="number" name="rank_${p.id}" value="${rankVal}" min="1" max="100" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-bold">`;
 
-    // Score input: oninput triggers autoRankMarioKartScores if Mario Kart
     const scoreInputHtml = isMK
       ? `<input type="number" name="score_${p.id}" value="${scoreVal}" step="any" oninput="autoRankMarioKartScores()" class="w-full text-center bg-slate-900 border border-slate-700 focus:border-indigo-500 rounded-lg px-2 py-1 text-xs text-amber-400 font-black">`
       : `<input type="number" name="score_${p.id}" value="${scoreVal}" step="any" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-400 font-black">`;
@@ -1096,10 +1362,10 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
           <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: ${p.color_hex}"></span>
           <span class="font-bold text-white">${p.nickname || p.name}</span>
         </td>
-        <td class="py-2.5 px-3">
+        <td class="py-2.5 px-3 manual-score-col ${hiddenClass}">
           ${rankInputHtml}
         </td>
-        <td class="py-2.5 px-3">
+        <td class="py-2.5 px-3 manual-score-col ${hiddenClass}">
           ${scoreInputHtml}
         </td>
         <td class="py-2.5 px-3">
@@ -1109,12 +1375,149 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
     `;
   }).join('');
 
-  if (isMK) {
+  if (isMK && showManualScoresInConfig) {
     autoRankMarioKartScores();
   }
 }
 
-async function prepareMatchModalBase(session) {
+function collectCurrentRuleValuesFromDOM() {
+  const ruleInputs = document.querySelectorAll('[name^="rule_"]');
+  ruleInputs.forEach(inp => {
+    const key = inp.name.replace('rule_', '');
+    currentRuleDraftValues[key] = inp.value;
+  });
+}
+
+function onMatchTypeChange() {
+  collectCurrentRuleValuesFromDOM();
+  const matchTypeSelect = document.getElementById('match-type-select');
+  const selectedMatchType = matchTypeSelect ? matchTypeSelect.value : '';
+
+  // Smart defaults when switching match types in Mario Kart
+  if (selectedMatchType.includes('Grand Prix')) {
+    currentRuleDraftValues['pistas'] = 'Copa Definida';
+    currentRuleDraftValues['carreras'] = '4 carreras';
+  } else if (selectedMatchType.includes('Individual')) {
+    currentRuleDraftValues['carreras'] = '1 carrera';
+    if (currentRuleDraftValues['pistas'] === 'Copa Definida') {
+      currentRuleDraftValues['pistas'] = 'Aleatorio';
+    }
+  } else if (selectedMatchType.includes('Patrulla Piraña')) {
+    currentRuleDraftValues['equipos'] = 'Por equipos';
+  }
+
+  renderDynamicGameRules();
+}
+
+function onDynamicRuleChange(inputName, newValue) {
+  const key = inputName.replace('rule_', '');
+  currentRuleDraftValues[key] = newValue;
+
+  if (key === 'pistas') {
+    if (newValue === 'Copa Definida') {
+      currentRuleDraftValues['carreras'] = '4 carreras';
+    }
+    renderDynamicGameRules();
+  }
+}
+
+function renderDynamicGameRules(overrideValues = null) {
+  if (overrideValues) {
+    currentRuleDraftValues = { ...currentRuleDraftValues, ...overrideValues };
+  } else {
+    collectCurrentRuleValuesFromDOM();
+  }
+
+  const rulesGrid = document.getElementById('match-dynamic-rules-grid');
+  const rulesSection = document.getElementById('match-game-rules-section');
+  const badgeEl = document.getElementById('match-rules-mode-badge');
+  const matchTypeSelect = document.getElementById('match-type-select');
+  const selectedMatchType = matchTypeSelect ? matchTypeSelect.value : '';
+
+  if (!currentMatchGame || !currentMatchGame.rule_settings || currentMatchGame.rule_settings.length === 0) {
+    if (rulesSection) rulesSection.classList.add('hidden');
+    if (rulesGrid) rulesGrid.innerHTML = '';
+    return;
+  }
+
+  // Update informative mode badge
+  if (badgeEl) {
+    if (selectedMatchType.includes('Grand Prix')) {
+      badgeEl.textContent = '🏆 Copa Definida (4 Carreras Automáticas)';
+    } else if (selectedMatchType.includes('Individual')) {
+      badgeEl.textContent = '🏎️ Carrera Única (1 Carrera)';
+    } else if (selectedMatchType.includes('Batalla') || selectedMatchType.includes('Patrulla')) {
+      badgeEl.textContent = '🎈 Modo Batalla por Rondas';
+    } else {
+      badgeEl.textContent = `🎛️ Parámetros: ${selectedMatchType}`;
+    }
+  }
+
+  // Filter rules applicable to selectedMatchType and depends_on conditions
+  const visibleRules = currentMatchGame.rule_settings.filter(r => {
+    if (Array.isArray(r.match_types) && r.match_types.length > 0) {
+      if (!r.match_types.includes(selectedMatchType)) {
+        return false;
+      }
+    }
+    if (r.depends_on) {
+      const alwaysFor = r.depends_on.always_for_match_types || [];
+      if (alwaysFor.includes(selectedMatchType)) {
+        return true;
+      }
+      const depField = r.depends_on.field;
+      const depRuleDef = currentMatchGame.rule_settings.find(x => x.id === depField);
+      const currentDepVal = currentRuleDraftValues[depField] !== undefined
+        ? currentRuleDraftValues[depField]
+        : (depRuleDef ? depRuleDef.default : '');
+      const allowedVals = r.depends_on.values || [];
+      if (!allowedVals.includes(currentDepVal)) {
+        return false;
+      }
+    }
+    // Hide 'carreras' selector if 'pistas' is 'Copa Definida' (since a Cup is always 4 races)
+    if (r.id === 'carreras' && currentRuleDraftValues['pistas'] === 'Copa Definida') {
+      return false;
+    }
+    return true;
+  });
+
+  if (visibleRules.length === 0) {
+    rulesSection.classList.add('hidden');
+    rulesGrid.innerHTML = '';
+    return;
+  }
+
+  rulesSection.classList.remove('hidden');
+  rulesGrid.innerHTML = visibleRules.map(r => {
+    const curVal = currentRuleDraftValues[r.id] !== undefined ? currentRuleDraftValues[r.id] : (r.default || '');
+    currentRuleDraftValues[r.id] = curVal;
+
+    if (r.type === 'string' || !Array.isArray(r.options)) {
+      return `
+        <div>
+          <label class="block text-slate-400 font-semibold mb-1">${r.name}</label>
+          <input type="text" name="rule_${r.id}" value="${curVal}" oninput="onDynamicRuleChange(this.name, this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500">
+        </div>
+      `;
+    }
+
+    const optionsHtml = (r.options || []).map(opt => `
+      <option value="${opt}" ${opt === curVal ? 'selected' : ''}>${opt}</option>
+    `).join('');
+
+    return `
+      <div>
+        <label class="block text-slate-400 font-semibold mb-1">${r.name}</label>
+        <select name="rule_${r.id}" onchange="onDynamicRuleChange(this.name, this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500">
+          ${optionsHtml}
+        </select>
+      </div>
+    `;
+  }).join('');
+}
+
+async function prepareMatchModalBase(session, initialMatchType = null, initialRules = null) {
   currentRecordingSession = session;
 
   const gameRes = await fetch(getApiUrl(`/api/games/${session.game_id}`));
@@ -1127,34 +1530,24 @@ async function prepareMatchModalBase(session) {
   const extraTh = document.getElementById('match-extra-metric-th');
   if (extraTh) extraTh.textContent = currentGameMetricsDef ? currentGameMetricsDef.name : 'Detalle';
 
+  // Reset rule drafts to game defaults
+  currentRuleDraftValues = {};
+  (game.rule_settings || []).forEach(r => {
+    if (r.default !== undefined) currentRuleDraftValues[r.id] = r.default;
+  });
+  if (initialRules) {
+    currentRuleDraftValues = { ...currentRuleDraftValues, ...initialRules };
+  }
+
   // Match types dropdown
   const matchTypeSelect = document.getElementById('match-type-select');
   matchTypeSelect.innerHTML = (game.match_types || ['Partida Regular']).map(mt => `<option value="${mt}">${mt}</option>`).join('');
-
-  // Dynamic Game Rules (e.g. Mario Kart 8 fields: Clase, Equipos, Objetos, CPU, etc.)
-  const rulesGrid = document.getElementById('match-dynamic-rules-grid');
-  const rulesSection = document.getElementById('match-game-rules-section');
-
-  if (game.rule_settings && game.rule_settings.length > 0) {
-    rulesSection.classList.remove('hidden');
-    rulesGrid.innerHTML = game.rule_settings.map(r => {
-      const optionsHtml = (r.options || []).map(opt => `
-        <option value="${opt}" ${opt === r.default ? 'selected' : ''}>${opt}</option>
-      `).join('');
-
-      return `
-        <div>
-          <label class="block text-slate-400 font-semibold mb-1">${r.name}</label>
-          <select name="rule_${r.id}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500">
-            ${optionsHtml}
-          </select>
-        </div>
-      `;
-    }).join('');
-  } else {
-    rulesSection.classList.add('hidden');
-    rulesGrid.innerHTML = '';
+  if (initialMatchType && (game.match_types || []).includes(initialMatchType)) {
+    matchTypeSelect.value = initialMatchType;
   }
+
+  renderDynamicGameRules(initialRules);
+  showMatchModalStep('config');
 
   return game;
 }
@@ -1170,12 +1563,14 @@ async function openRecordMatchModal(sessionId) {
 
     document.getElementById('match-modal-title').innerHTML = `<span>🏁</span> Registrar Partida #${session.matches.length + 1}`;
     document.getElementById('match-modal-subtitle').textContent = `Juego: ${game.name} · ${session.title}`;
-    document.getElementById('btn-save-match').textContent = 'Guardar Partida';
+    document.getElementById('btn-save-match').textContent = '💾 Guardar Puntaje Manual';
+
+    // Hide manual score columns by default to highlight Capture Mode
+    toggleManualScoreTable(false);
 
     // Select all session players by default
     currentSelectedPlayerIds = new Set(session.players.map(p => p.id));
 
-    // Render player selection checkboxes
     const selectorGrid = document.getElementById('match-participants-selector-grid');
     if (selectorGrid) {
       selectorGrid.innerHTML = session.players.map(p => `
@@ -1204,27 +1599,18 @@ async function openEditMatchModal(matchId) {
 
   try {
     currentEditingMatchId = matchId;
-    const game = await prepareMatchModalBase(currentRecordingSession);
+    await prepareMatchModalBase(currentRecordingSession, match.match_type, match.rule_values || {});
 
     document.getElementById('match-modal-title').innerHTML = `<span>✏️</span> Editar Partida #${match.match_number}`;
     document.getElementById('match-modal-subtitle').textContent = `Modificando resultados de Partida #${match.match_number} (${match.match_type})`;
-    document.getElementById('btn-save-match').textContent = 'Actualizar Partida';
+    document.getElementById('btn-save-match').textContent = '💾 Actualizar Puntaje Manual';
 
-    // Set match type
-    const matchTypeSelect = document.getElementById('match-type-select');
-    if (matchTypeSelect) matchTypeSelect.value = match.match_type;
+    // Show manual score columns when editing so they can edit either manually or via Capture Mode
+    toggleManualScoreTable(true);
 
-    // Set practice
     document.getElementById('match-is-practice').checked = Boolean(match.is_practice);
     document.getElementById('match-notes').value = match.notes || '';
 
-    // Set dynamic rules
-    Object.entries(match.rule_values || {}).forEach(([k, v]) => {
-      const el = document.querySelector(`[name="rule_${k}"]`);
-      if (el) el.value = v;
-    });
-
-    // Populate players that were in this match
     const matchPlayerIds = new Set(match.scores.map(s => s.player_id));
     currentSelectedPlayerIds = matchPlayerIds;
 
@@ -1242,7 +1628,6 @@ async function openEditMatchModal(matchId) {
       }).join('');
     }
 
-    // Map existing scores
     const existingScoresMap = {};
     match.scores.forEach(sc => { existingScoresMap[sc.player_id] = sc; });
 
@@ -1251,6 +1636,815 @@ async function openEditMatchModal(matchId) {
   } catch (err) {
     console.error('Error opening edit match modal:', err);
   }
+}
+
+// -----------------------------------------------------------------------------
+// MODO CAPTURA RÁPIDA (CARRERA POR CARRERA)
+// -----------------------------------------------------------------------------
+function computeAutoTracksForConfig(matchType, ruleValues, totalRaces) {
+  const mtLower = (matchType || '').toLowerCase();
+  const isBattle = mtLower.includes('batalla') || mtLower.includes('patrulla');
+  const pistasMode = ruleValues.pistas || (mtLower.includes('grand prix') ? 'Copa Definida' : 'Aleatorio');
+  const chosenCupName = ruleValues.copa || '🍄 Copa Champiñón';
+
+  if (isBattle) {
+    if (ruleValues.escenarios === 'En orden') {
+      const battleCup = MK8_CUPS_CATALOG.find(c => c.cup.includes('Batalla')) || MK8_CUPS_CATALOG[MK8_CUPS_CATALOG.length - 1];
+      const tracks = [];
+      for (let i = 0; i < totalRaces; i++) {
+        tracks.push({
+          cup_name: battleCup.cup,
+          track_name: battleCup.tracks[i % battleCup.tracks.length],
+          auto: true
+        });
+      }
+      return tracks;
+    }
+    return [];
+  }
+
+  if (mtLower.includes('grand prix') || pistasMode === 'Copa Definida') {
+    const cupObj = MK8_CUPS_CATALOG.find(c => c.cup === chosenCupName) || MK8_CUPS_CATALOG[0];
+    return cupObj.tracks.slice(0, totalRaces).map(t => ({
+      cup_name: cupObj.cup,
+      track_name: t,
+      auto: true
+    }));
+  }
+
+  if (pistasMode === 'En orden') {
+    const raceCups = MK8_CUPS_CATALOG.filter(c => !c.cup.includes('Batalla'));
+    let startCupIdx = raceCups.findIndex(c => c.cup === chosenCupName);
+    if (startCupIdx < 0) startCupIdx = 0;
+
+    const orderedAll = [];
+    for (let cOffset = 0; cOffset < raceCups.length; cOffset++) {
+      const cupObj = raceCups[(startCupIdx + cOffset) % raceCups.length];
+      cupObj.tracks.forEach(t => {
+        orderedAll.push({ cup_name: cupObj.cup, track_name: t, auto: true });
+      });
+    }
+    const result = [];
+    for (let i = 0; i < totalRaces; i++) {
+      result.push(orderedAll[i % orderedAll.length]);
+    }
+    return result;
+  }
+
+  return [];
+}
+
+function startCaptureMode() {
+  if (!currentRecordingSession) return;
+  if (currentSelectedPlayerIds.size === 0) {
+    showToast('Selecciona al menos un jugador participante antes de iniciar la captura', 'error');
+    return;
+  }
+
+  collectCurrentRuleValuesFromDOM();
+  const matchType = document.getElementById('match-type-select').value;
+  const isPractice = document.getElementById('match-is-practice').checked;
+  const notes = document.getElementById('match-notes').value;
+
+  const ruleValues = {};
+  const ruleInputs = document.querySelectorAll('[name^="rule_"]');
+  ruleInputs.forEach(inp => {
+    const key = inp.name.replace('rule_', '');
+    ruleValues[key] = inp.value;
+  });
+
+  // Collect selected player metrics (character / kart)
+  const playerMetrics = {};
+  currentSelectedPlayerIds.forEach(pid => {
+    const metricInp = document.querySelector(`[name="metric_${pid}"]`);
+    if (metricInp && metricInp.value) {
+      playerMetrics[pid] = { character: metricInp.value };
+    } else {
+      playerMetrics[pid] = {};
+    }
+  });
+
+  // Determine number of races
+  let totalRaces = 4;
+  const mtLower = matchType.toLowerCase();
+  if (mtLower.includes('individual')) {
+    totalRaces = 1;
+  } else if (mtLower.includes('grand prix') || ruleValues.pistas === 'Copa Definida') {
+    totalRaces = 4;
+  } else {
+    const rawCarreras = ruleValues.carreras || ruleValues.rondas_batalla || '4 carreras';
+    const m = String(rawCarreras).match(/\d+/);
+    totalRaces = m ? parseInt(m[0], 10) : 4;
+  }
+
+  const autoTracks = computeAutoTracksForConfig(matchType, ruleValues, totalRaces);
+  const isAutoCup = autoTracks.length > 0;
+
+  // Check if editing a match that already has recorded races
+  let existingRaces = [];
+  if (currentEditingMatchId && currentRecordingSession) {
+    const existingMatch = currentRecordingSession.matches.find(m => m.id === currentEditingMatchId);
+    if (existingMatch && Array.isArray(existingMatch.races) && existingMatch.races.length > 0) {
+      existingRaces = existingMatch.races;
+    }
+  }
+
+  const races = [];
+  for (let i = 0; i < totalRaces; i++) {
+    const ex = existingRaces[i];
+    const autoT = autoTracks[i];
+    const positions = {};
+    if (ex && Array.isArray(ex.scores)) {
+      ex.scores.forEach(rs => {
+        positions[rs.player_id] = rs.position;
+      });
+    }
+    races.push({
+      race_number: i + 1,
+      cup_name: ex ? (ex.cup_name || '') : (autoT ? autoT.cup_name : ''),
+      track_name: ex ? (ex.track_name || '') : (autoT ? autoT.track_name : ''),
+      class_mode: ruleValues.clase || '150cc',
+      positions
+    });
+  }
+
+  const initialCup = (autoTracks[0] && autoTracks[0].cup_name) || ruleValues.copa || MK8_CUPS_CATALOG[0].cup;
+
+  captureState = {
+    totalRaces,
+    currentRaceIdx: 0,
+    matchType,
+    ruleValues,
+    isPractice,
+    notes,
+    playerMetrics,
+    isAutoCup,
+    selectedCupTab: initialCup,
+    showTrackPicker: !isAutoCup,
+    searchQuery: '',
+    races
+  };
+
+  const searchInp = document.getElementById('capture-track-search');
+  if (searchInp) searchInp.value = '';
+
+  showMatchModalStep('capture');
+  renderCaptureRaceStep();
+}
+
+function returnToMatchConfig() {
+  showMatchModalStep('config');
+}
+
+function isRaceCompleted(raceObj) {
+  if (!raceObj) return false;
+  for (const pid of currentSelectedPlayerIds) {
+    if (!raceObj.positions[pid]) return false;
+  }
+  return currentSelectedPlayerIds.size > 0;
+}
+
+function jumpToCaptureRace(idx) {
+  if (idx < 0 || idx >= captureState.totalRaces) return;
+  captureState.currentRaceIdx = idx;
+  captureState.showTrackPicker = !captureState.isAutoCup && !captureState.races[idx].track_name;
+  renderCaptureRaceStep();
+}
+
+function toggleCaptureTrackPicker() {
+  captureState.showTrackPicker = !captureState.showTrackPicker;
+  renderCaptureTrackSection();
+}
+
+function selectCaptureCup(cupName) {
+  captureState.selectedCupTab = cupName;
+  captureState.searchQuery = '';
+  const searchInp = document.getElementById('capture-track-search');
+  if (searchInp) searchInp.value = '';
+  renderCaptureTrackSection();
+}
+
+function selectCaptureTrack(cupName, trackName) {
+  const curRace = captureState.races[captureState.currentRaceIdx];
+  if (!curRace) return;
+  curRace.cup_name = cupName;
+  curRace.track_name = trackName;
+  captureState.showTrackPicker = false;
+  renderCaptureTrackSection();
+}
+
+function pickRandomMarioKartTrack() {
+  const isBattle = captureState.matchType.toLowerCase().includes('batalla') || captureState.matchType.toLowerCase().includes('patrulla');
+  const pool = isBattle
+    ? MK8_CUPS_CATALOG.filter(c => c.cup.includes('Batalla'))
+    : MK8_CUPS_CATALOG.filter(c => !c.cup.includes('Batalla'));
+  const randCup = pool[Math.floor(Math.random() * pool.length)];
+  const randTrack = randCup.tracks[Math.floor(Math.random() * randCup.tracks.length)];
+  captureState.selectedCupTab = randCup.cup;
+  selectCaptureTrack(randCup.cup, randTrack);
+}
+
+function filterCaptureTracks(query) {
+  captureState.searchQuery = (query || '').trim();
+  renderCaptureTrackButtonsOnly();
+}
+
+function renderCaptureTrackSection() {
+  const curRace = captureState.races[captureState.currentRaceIdx];
+  if (!curRace) return;
+
+  const trackDisplay = document.getElementById('capture-current-track-display');
+  const autoBadge = document.getElementById('capture-track-auto-badge');
+  const pickerPanel = document.getElementById('capture-track-picker-panel');
+  const toggleBtn = document.getElementById('btn-toggle-track-picker');
+
+  if (trackDisplay) {
+    if (curRace.track_name) {
+      trackDisplay.innerHTML = `${curRace.cup_name ? `<span class="text-indigo-400 font-bold">${curRace.cup_name}</span> · ` : ''}<span class="text-white">${curRace.track_name}</span>`;
+    } else {
+      trackDisplay.innerHTML = `<span class="text-amber-400">Selecciona la pista jugada abajo ↓</span>`;
+    }
+  }
+
+  if (autoBadge) {
+    autoBadge.classList.toggle('hidden', !captureState.isAutoCup);
+  }
+
+  if (pickerPanel) {
+    pickerPanel.classList.toggle('hidden', !captureState.showTrackPicker);
+  }
+
+  if (toggleBtn) {
+    toggleBtn.textContent = captureState.showTrackPicker ? 'Ocultar Selector' : 'Cambiar Pista';
+  }
+
+  // Render Cup Pills
+  const cupsGrid = document.getElementById('capture-cups-grid');
+  if (cupsGrid) {
+    cupsGrid.innerHTML = MK8_CUPS_CATALOG.map(c => {
+      const isSelected = c.cup === captureState.selectedCupTab && !captureState.searchQuery;
+      const btnCls = isSelected
+        ? 'bg-indigo-600 text-white border-indigo-500 shadow'
+        : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800';
+      return `
+        <button type="button" onclick="selectCaptureCup('${c.cup}')" class="px-2.5 py-1 rounded-xl border text-[11px] font-bold whitespace-nowrap transition flex-shrink-0 ${btnCls}">
+          ${c.cup}
+        </button>
+      `;
+    }).join('');
+  }
+
+  renderCaptureTrackButtonsOnly();
+}
+
+function renderCaptureTrackButtonsOnly() {
+  const curRace = captureState.races[captureState.currentRaceIdx];
+  const tracksContainer = document.getElementById('capture-tracks-buttons');
+  if (!tracksContainer || !curRace) return;
+
+  const q = (captureState.searchQuery || '').toLowerCase();
+  let trackItems = [];
+
+  if (q.length > 0) {
+    MK8_CUPS_CATALOG.forEach(c => {
+      c.tracks.forEach(t => {
+        if (t.toLowerCase().includes(q) || c.cup.toLowerCase().includes(q)) {
+          trackItems.push({ cup: c.cup, track: t });
+        }
+      });
+    });
+  } else {
+    const activeCup = MK8_CUPS_CATALOG.find(c => c.cup === captureState.selectedCupTab) || MK8_CUPS_CATALOG[0];
+    trackItems = activeCup.tracks.map(t => ({ cup: activeCup.cup, track: t }));
+  }
+
+  if (trackItems.length === 0) {
+    tracksContainer.innerHTML = `<div class="col-span-2 text-center py-3 text-xs text-slate-500">No se encontraron pistas con "${captureState.searchQuery}".</div>`;
+    return;
+  }
+
+  tracksContainer.innerHTML = trackItems.slice(0, 12).map((item, idx) => {
+    const isCurrent = curRace.track_name === item.track && curRace.cup_name === item.cup;
+    const cls = isCurrent
+      ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300 font-black'
+      : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-slate-200 font-semibold';
+    return `
+      <button type="button" onclick="selectCaptureTrack('${item.cup}', '${item.track}')" class="p-2.5 rounded-xl border text-left text-xs flex items-center justify-between transition ${cls}">
+        <div>
+          <div class="text-xs">${item.track}</div>
+          <div class="text-[10px] text-slate-400">${item.cup}</div>
+        </div>
+        <span class="text-sm">${isCurrent ? '✅' : '🏁'}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+function setPlayerRacePosition(playerId, position) {
+  const curRace = captureState.races[captureState.currentRaceIdx];
+  if (!curRace) return;
+
+  // If another player already has this position in the current race (and not Por equipos), clear it to prevent accidental duplicates
+  if (captureState.ruleValues.equipos !== 'Por equipos') {
+    Object.keys(curRace.positions).forEach(otherPid => {
+      if (Number(otherPid) !== Number(playerId) && curRace.positions[otherPid] === position) {
+        delete curRace.positions[otherPid];
+      }
+    });
+  }
+
+  curRace.positions[playerId] = position;
+  renderCapturePlayersAndStandings();
+}
+
+function renderCapturePlayersAndStandings() {
+  const curRace = captureState.races[captureState.currentRaceIdx];
+  if (!curRace || !currentRecordingSession) return;
+
+  const selectedPlayers = currentRecordingSession.players.filter(p => currentSelectedPlayerIds.has(p.id));
+  const listEl = document.getElementById('capture-players-positions-list');
+
+  // Taken positions in this race
+  const takenByPlayer = {};
+  Object.entries(curRace.positions).forEach(([pid, pos]) => {
+    takenByPlayer[pos] = Number(pid);
+  });
+
+  if (listEl) {
+    listEl.innerHTML = selectedPlayers.map(p => {
+      const curPos = curRace.positions[p.id] || null;
+      const curPts = curPos ? getPointsForPosition(curPos) : 0;
+      const charName = captureState.playerMetrics[p.id]?.character || '';
+
+      const posButtonsHtml = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(pos => {
+        const isSelected = curPos === pos;
+        const isTakenByOther = takenByPlayer[pos] && takenByPlayer[pos] !== p.id;
+        let btnStyle = 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:border-slate-700';
+
+        if (isSelected) {
+          if (pos === 1) btnStyle = 'bg-amber-500 border-amber-400 text-slate-950 font-black shadow-md shadow-amber-500/30 scale-105';
+          else if (pos === 2) btnStyle = 'bg-slate-300 border-white text-slate-950 font-black shadow-md scale-105';
+          else if (pos === 3) btnStyle = 'bg-amber-700 border-amber-500 text-white font-black shadow-md scale-105';
+          else btnStyle = 'bg-indigo-600 border-indigo-400 text-white font-black shadow-md shadow-indigo-600/30 scale-105';
+        } else if (isTakenByOther) {
+          btnStyle = 'bg-slate-950/50 border-slate-900 text-slate-600 hover:bg-slate-800 hover:text-slate-300';
+        }
+
+        return `
+          <button type="button" onclick="setPlayerRacePosition(${p.id}, ${pos})" class="h-9 rounded-xl border text-xs transition flex items-center justify-center ${btnStyle}">
+            ${pos}º
+          </button>
+        `;
+      }).join('');
+
+      const statusBadge = curPos
+        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">${curPos}º Lugar · +${curPts} pts</span>`
+        : `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">Selecciona lugar</span>`;
+
+      return `
+        <div class="p-3 rounded-xl bg-slate-900/90 border ${curPos ? 'border-slate-800' : 'border-amber-500/30'} space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${p.color_hex}"></span>
+              <span class="font-bold text-white text-xs sm:text-sm">${p.nickname || p.name}</span>
+              ${charName ? `<span class="text-[11px] text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">🏎️ ${charName}</span>` : ''}
+            </div>
+            ${statusBadge}
+          </div>
+          <div class="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+            ${posButtonsHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Update race pills status
+  const pillsEl = document.getElementById('capture-race-pills');
+  if (pillsEl) {
+    pillsEl.innerHTML = captureState.races.map((r, idx) => {
+      const done = isRaceCompleted(r);
+      const isCurrent = idx === captureState.currentRaceIdx;
+      let cls = 'bg-slate-900 text-slate-400 border-slate-800';
+      if (isCurrent) {
+        cls = 'bg-indigo-600 text-white border-indigo-400 font-black shadow';
+      } else if (done) {
+        cls = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-bold';
+      }
+      return `
+        <button type="button" onclick="jumpToCaptureRace(${idx})" class="px-2.5 py-1 rounded-lg border text-[11px] whitespace-nowrap transition flex-shrink-0 ${cls}">
+          C${idx + 1} ${done ? '✓' : ''}
+        </button>
+      `;
+    }).join('');
+  }
+
+  // Compute live cumulative standings up to current captured races
+  const totals = {};
+  const winsCount = {};
+  selectedPlayers.forEach(p => {
+    totals[p.id] = 0;
+    winsCount[p.id] = 0;
+  });
+
+  let completedRacesCount = 0;
+  captureState.races.forEach(r => {
+    let anyInRace = false;
+    Object.entries(r.positions).forEach(([pid, pos]) => {
+      const numPid = Number(pid);
+      if (totals[numPid] !== undefined && pos) {
+        totals[numPid] += getPointsForPosition(pos);
+        if (pos === 1) winsCount[numPid] += 1;
+        anyInRace = true;
+      }
+    });
+    if (anyInRace) completedRacesCount++;
+  });
+
+  const sortedLive = [...selectedPlayers].sort((a, b) => (totals[b.id] - totals[a.id]) || (winsCount[b.id] - winsCount[a.id]));
+  const leaderScore = sortedLive.length > 0 ? totals[sortedLive[0].id] : 0;
+
+  const liveCountEl = document.getElementById('capture-live-races-completed');
+  if (liveCountEl) {
+    liveCountEl.textContent = `${completedRacesCount} de ${captureState.totalRaces} carreras con puntaje`;
+  }
+
+  const liveGrid = document.getElementById('capture-live-standings-grid');
+  if (liveGrid) {
+    liveGrid.innerHTML = sortedLive.map((p, idx) => {
+      const sc = totals[p.id];
+      const diff = sc - leaderScore;
+      const diffText = idx === 0 ? '👑 Líder' : `${diff} pts`;
+      const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
+      return `
+        <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold text-white truncate">${medal} ${p.nickname || p.name}</div>
+            <div class="text-[10px] ${idx === 0 ? 'text-amber-400 font-semibold' : 'text-slate-400'}">${diffText} · ${winsCount[p.id]} vic</div>
+          </div>
+          <div class="text-sm font-black text-amber-400 ml-2">${sc}p</div>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+function renderCaptureRaceStep() {
+  const idx = captureState.currentRaceIdx;
+  const total = captureState.totalRaces;
+  const curRace = captureState.races[idx];
+
+  const counterEl = document.getElementById('capture-race-counter');
+  if (counterEl) counterEl.textContent = `🏁 Carrera ${idx + 1} de ${total}`;
+
+  const summaryEl = document.getElementById('capture-rules-summary');
+  if (summaryEl) {
+    const clase = captureState.ruleValues.clase || '';
+    const copa = captureState.ruleValues.copa || '';
+    summaryEl.textContent = [captureState.matchType, clase, captureState.isAutoCup ? copa : ''].filter(Boolean).join(' · ');
+  }
+
+  // Navigation buttons
+  const prevBtn = document.getElementById('btn-capture-prev-race');
+  if (prevBtn) {
+    prevBtn.disabled = idx === 0;
+    prevBtn.classList.toggle('opacity-40', idx === 0);
+  }
+
+  const earlyBtn = document.getElementById('btn-capture-finish-early');
+  if (earlyBtn) {
+    earlyBtn.classList.toggle('hidden', idx === total - 1);
+  }
+
+  const nextBtn = document.getElementById('btn-capture-next-race');
+  if (nextBtn) {
+    if (idx < total - 1) {
+      nextBtn.innerHTML = `<span>Continuar a Carrera ${idx + 2}</span> <span>→</span>`;
+      nextBtn.className = 'px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-black shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition';
+    } else {
+      nextBtn.innerHTML = `<span>🏁 Finalizar Partida y Guardar Resultados</span>`;
+      nextBtn.className = 'px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-black shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition';
+    }
+  }
+
+  if (curRace && curRace.cup_name) {
+    captureState.selectedCupTab = curRace.cup_name;
+  }
+
+  renderCaptureTrackSection();
+  renderCapturePlayersAndStandings();
+}
+
+function capturePrevRace() {
+  if (captureState.currentRaceIdx > 0) {
+    captureState.currentRaceIdx--;
+    captureState.showTrackPicker = !captureState.isAutoCup && !captureState.races[captureState.currentRaceIdx].track_name;
+    renderCaptureRaceStep();
+  }
+}
+
+function validateCurrentCaptureRace() {
+  const curRace = captureState.races[captureState.currentRaceIdx];
+  if (!curRace) return false;
+
+  const missingPlayers = [];
+  currentRecordingSession.players.forEach(p => {
+    if (currentSelectedPlayerIds.has(p.id) && !curRace.positions[p.id]) {
+      missingPlayers.push(p.nickname || p.name);
+    }
+  });
+
+  if (missingPlayers.length > 0) {
+    showToast(`Falta seleccionar el lugar de: ${missingPlayers.join(', ')}`, 'error');
+    return false;
+  }
+
+  if (!curRace.track_name) {
+    curRace.track_name = `Pista #${curRace.race_number}`;
+  }
+  return true;
+}
+
+async function captureNextOrFinishRace() {
+  if (!validateCurrentCaptureRace()) return;
+
+  if (captureState.currentRaceIdx < captureState.totalRaces - 1) {
+    captureState.currentRaceIdx++;
+    const nextRace = captureState.races[captureState.currentRaceIdx];
+    captureState.showTrackPicker = !captureState.isAutoCup && !nextRace.track_name;
+    renderCaptureRaceStep();
+  } else {
+    await saveCapturedMatch(false);
+  }
+}
+
+async function finishCaptureMatchNow() {
+  // Allow finishing early with all races that have at least one position recorded
+  const curRace = captureState.races[captureState.currentRaceIdx];
+  const anyPosInCurrent = curRace && Object.keys(curRace.positions).length > 0;
+  if (anyPosInCurrent && !validateCurrentCaptureRace()) {
+    return;
+  }
+  await saveCapturedMatch(true);
+}
+
+async function saveCapturedMatch(finishedEarly = false) {
+  if (!currentRecordingSession) return;
+
+  const validRaces = captureState.races.filter(r => Object.keys(r.positions).length > 0);
+  if (validRaces.length === 0) {
+    showToast('Captura al menos una carrera antes de guardar la partida', 'error');
+    return;
+  }
+
+  const racesPayload = validRaces.map((r, idx) => ({
+    race_number: idx + 1,
+    cup_name: r.cup_name || '',
+    track_name: r.track_name || `Pista #${idx + 1}`,
+    class_mode: r.class_mode || captureState.ruleValues.clase || '150cc',
+    scores: Array.from(currentSelectedPlayerIds).map(pid => {
+      const pos = r.positions[pid] || 12;
+      return {
+        player_id: pid,
+        position: pos,
+        points: getPointsForPosition(pos)
+      };
+    })
+  }));
+
+  // Sum totals per player
+  const totalsByPid = {};
+  currentSelectedPlayerIds.forEach(pid => { totalsByPid[pid] = 0; });
+  racesPayload.forEach(r => {
+    r.scores.forEach(rs => {
+      totalsByPid[rs.player_id] = (totalsByPid[rs.player_id] || 0) + rs.points;
+    });
+  });
+
+  const scoresPayload = Array.from(currentSelectedPlayerIds).map(pid => ({
+    player_id: pid,
+    score: totalsByPid[pid] || 0,
+    rank_position: 1,
+    metrics: captureState.playerMetrics[pid] || {}
+  }));
+
+  scoresPayload.sort((a, b) => b.score - a.score);
+  scoresPayload.forEach((sc, idx) => { sc.rank_position = idx + 1; });
+
+  const ruleValuesToSave = {
+    ...captureState.ruleValues,
+    carreras: `${racesPayload.length} carreras`
+  };
+
+  const nextBtn = document.getElementById('btn-capture-next-race');
+  if (nextBtn) {
+    nextBtn.disabled = true;
+    nextBtn.textContent = 'Guardando partida...';
+  }
+
+  try {
+    let url = `/api/sessions/${currentRecordingSession.id}/matches`;
+    let method = 'POST';
+    if (currentEditingMatchId) {
+      url = `/api/sessions/matches/${currentEditingMatchId}`;
+      method = 'PUT';
+    }
+
+    const res = await fetch(getApiUrl(url), {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        match_type: captureState.matchType,
+        rule_values: ruleValuesToSave,
+        is_practice: captureState.isPractice,
+        notes: captureState.notes,
+        scores: scoresPayload,
+        races: racesPayload
+      })
+    });
+
+    if (res.ok) {
+      const updatedSession = await res.json();
+      currentRecordingSession = updatedSession;
+      renderSessionDetail(updatedSession);
+
+      const savedMatch = currentEditingMatchId
+        ? updatedSession.matches.find(m => m.id === currentEditingMatchId)
+        : updatedSession.matches[updatedSession.matches.length - 1];
+
+      currentEditingMatchId = null;
+      showToast('¡Partida y carreras guardadas con éxito!', 'success');
+      showFinishedMatchStep(savedMatch, updatedSession);
+    } else {
+      showToast('Error al guardar la partida', 'error');
+    }
+  } catch (err) {
+    console.error('Error saving captured match:', err);
+    showToast('Error de conexión al guardar la partida', 'error');
+  } finally {
+    if (nextBtn) {
+      nextBtn.disabled = false;
+    }
+  }
+}
+
+function showFinishedMatchStep(match, session) {
+  showMatchModalStep('finished');
+
+  const headline = document.getElementById('finished-match-headline');
+  const subheadline = document.getElementById('finished-match-subheadline');
+  const podiumCards = document.getElementById('finished-match-podium-cards');
+
+  if (match) {
+    const winner = (match.scores || [])[0];
+    if (headline) {
+      headline.textContent = winner
+        ? `🏆 ¡${winner.player_nickname || winner.player_name} gana la Partida #${match.match_number}!`
+        : `¡Partida #${match.match_number} Finalizada!`;
+    }
+    if (subheadline) {
+      subheadline.textContent = `${match.match_type} · ${match.race_count || (match.races || []).length} carreras disputadas · ${session.title}`;
+    }
+    if (podiumCards) {
+      podiumCards.innerHTML = (match.scores || []).map((sc, idx) => {
+        const medal = idx === 0 ? '🥇 1º' : idx === 1 ? '🥈 2º' : idx === 2 ? '🥉 3º' : `${idx + 1}º`;
+        const borderCls = idx === 0 ? 'border-amber-400/50 bg-amber-500/10' : 'border-slate-800 bg-slate-900/80';
+        return `
+          <div class="p-3 rounded-xl border ${borderCls} flex items-center justify-between">
+            <div>
+              <div class="text-xs font-black text-white">${medal} ${sc.player_nickname || sc.player_name}</div>
+              <div class="text-[10px] text-slate-400">${sc.metrics?.character || 'Sin personaje'}</div>
+            </div>
+            <div class="text-base font-black text-amber-400">${sc.score} pts</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    const burndownContainer = document.getElementById('finished-match-burndown-container');
+    if (match.races && match.races.length > 0) {
+      if (burndownContainer) burndownContainer.classList.remove('hidden');
+      setTimeout(() => {
+        renderCupBurndownChart('post-match-burndown-chart', match.races, session.players, true);
+      }, 50);
+    } else if (burndownContainer) {
+      burndownContainer.classList.add('hidden');
+    }
+  }
+}
+
+function renderCupBurndownChart(canvasId, races, sessionPlayers, isPostMatchModal = false) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !races || races.length === 0) return;
+
+  if (isPostMatchModal && postMatchBurndownChartInstance) {
+    postMatchBurndownChartInstance.destroy();
+    postMatchBurndownChartInstance = null;
+  } else if (sessionMatchBurndownCharts[canvasId]) {
+    sessionMatchBurndownCharts[canvasId].destroy();
+    delete sessionMatchBurndownCharts[canvasId];
+  }
+
+  const labels = races.map(r => `C${r.race_number}: ${(r.track_name || '').substring(0, 14)}`);
+  const playerMap = {};
+  (sessionPlayers || []).forEach(p => { playerMap[p.id] = p; });
+
+  // Identify participating players in these races
+  const pids = new Set();
+  races.forEach(r => (r.scores || []).forEach(rs => pids.add(rs.player_id)));
+
+  const datasets = Array.from(pids).map(pid => {
+    const pInfo = playerMap[pid] || {};
+    let running = 0;
+    const dataPoints = races.map(r => {
+      const found = (r.scores || []).find(rs => rs.player_id === pid);
+      if (found) {
+        running = found.cumulative_points !== undefined ? found.cumulative_points : (running + found.points);
+      }
+      return running;
+    });
+    const firstRaceScore = (races[0].scores || []).find(rs => rs.player_id === pid);
+    const color = pInfo.color_hex || (firstRaceScore && firstRaceScore.color_hex) || '#6366f1';
+    const label = pInfo.nickname || pInfo.name || (firstRaceScore && (firstRaceScore.player_nickname || firstRaceScore.player_name)) || `Jugador ${pid}`;
+
+    return {
+      label,
+      data: dataPoints,
+      borderColor: color,
+      backgroundColor: color,
+      borderWidth: 2.5,
+      pointRadius: 3.5,
+      tension: 0.25
+    };
+  });
+
+  const chart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: '#cbd5e1', font: { size: 11, weight: 'bold' }, boxWidth: 12 }
+        },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const rIdx = items[0].dataIndex;
+              const r = races[rIdx];
+              return r ? `Carrera #${r.race_number}: ${r.track_name} ${r.cup_name ? '(' + r.cup_name + ')' : ''}` : '';
+            },
+            label: (item) => {
+              const r = races[item.dataIndex];
+              const pId = Array.from(pids)[item.datasetIndex];
+              const rs = r && (r.scores || []).find(s => s.player_id === pId);
+              const posTxt = rs ? ` (${rs.position}º lugar: +${rs.points} pts)` : '';
+              return `${item.dataset.label}: ${item.formattedValue} pts acumulados${posTxt}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#1e293b' } },
+        y: { beginAtZero: true, ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#1e293b' } }
+      }
+    }
+  });
+
+  if (isPostMatchModal) {
+    postMatchBurndownChartInstance = chart;
+  } else {
+    sessionMatchBurndownCharts[canvasId] = chart;
+  }
+}
+
+function toggleMatchBurndownPanel(matchId) {
+  const panel = document.getElementById(`match-burndown-panel-${matchId}`);
+  if (!panel) return;
+  const isHidden = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !isHidden);
+
+  if (isHidden && currentRecordingSession) {
+    const match = (currentRecordingSession.matches || []).find(m => m.id === matchId);
+    if (match && match.races && match.races.length > 0) {
+      setTimeout(() => {
+        renderCupBurndownChart(`match-burndown-canvas-${matchId}`, match.races, currentRecordingSession.players, false);
+      }, 40);
+    }
+  }
+}
+
+async function startAnotherMatchFromFinished() {
+  if (!currentRecordingSession) return;
+  await openRecordMatchModal(currentRecordingSession.id);
+}
+
+async function closeSessionFromFinished() {
+  if (!currentRecordingSession) return;
+  closeModal('modal-match');
+  await toggleSessionStatus(currentRecordingSession.id, 'completed');
 }
 
 async function handleCreateOrUpdateMatch(e) {
@@ -1296,7 +2490,6 @@ async function handleCreateOrUpdateMatch(e) {
     });
   });
 
-  // For Mario Kart, strictly enforce rank_position by score descending
   if (isMarioKartGame(currentMatchGame)) {
     scores.sort((a, b) => b.score - a.score);
     scores.forEach((sc, idx) => {
@@ -1332,10 +2525,22 @@ async function handleCreateOrUpdateMatch(e) {
     });
 
     if (res.ok) {
-      closeModal('modal-match');
-      showToast(currentEditingMatchId ? '¡Partida actualizada con éxito!' : (is_practice ? 'Partida de práctica registrada' : '¡Partida oficial guardada!'), 'success');
+      const updatedSession = await res.json();
+      currentRecordingSession = updatedSession;
+      renderSessionDetail(updatedSession);
+      const wasEditing = Boolean(currentEditingMatchId);
+      const savedMatch = wasEditing
+        ? updatedSession.matches.find(m => m.id === currentEditingMatchId)
+        : updatedSession.matches[updatedSession.matches.length - 1];
       currentEditingMatchId = null;
-      viewSession(currentRecordingSession.id);
+
+      if (wasEditing) {
+        closeModal('modal-match');
+        showToast('¡Partida actualizada con éxito!', 'success');
+      } else {
+        showToast(is_practice ? 'Partida de práctica registrada' : '¡Partida oficial guardada!', 'success');
+        showFinishedMatchStep(savedMatch, updatedSession);
+      }
     } else {
       showToast('Error al guardar la partida', 'error');
     }
@@ -1344,7 +2549,7 @@ async function handleCreateOrUpdateMatch(e) {
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.textContent = currentEditingMatchId ? 'Actualizar Partida' : 'Guardar Partida';
+      submitBtn.textContent = currentEditingMatchId ? '💾 Actualizar Puntaje Manual' : '💾 Guardar Puntaje Manual';
     }
   }
 }

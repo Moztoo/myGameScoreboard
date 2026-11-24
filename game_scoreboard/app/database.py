@@ -14,8 +14,11 @@ AVATARS_DIR = DATA_DIR / "avatars"
 DEFAULT_GAMES_PATH = BASE_DIR / "default_games.yaml"
 
 
-def get_match_race_count(rule_values: Any, match_type: str = "") -> int:
-    """Extract the number of races played in a match from its rules or match type."""
+def get_match_race_count(rule_values: Any, match_type: str = "", recorded_races_count: int = 0) -> int:
+    """Extract the number of races played in a match from recorded races, rules, or match type."""
+    if recorded_races_count and recorded_races_count > 0:
+        return int(recorded_races_count)
+
     if isinstance(rule_values, str):
         try:
             rule_values = json.loads(rule_values)
@@ -24,17 +27,20 @@ def get_match_race_count(rule_values: Any, match_type: str = "") -> int:
     elif not isinstance(rule_values, dict):
         rule_values = {}
 
-    carreras_val = rule_values.get("carreras") or rule_values.get("races")
+    mt_lower = (match_type or "").lower()
+    if "individual" in mt_lower:
+        return 1
+    if "grand prix" in mt_lower or str(rule_values.get("pistas", "")).lower() == "copa definida":
+        return 4
+
+    carreras_val = rule_values.get("carreras") or rule_values.get("rondas_batalla") or rule_values.get("races")
     if carreras_val:
         m = re.search(r'\d+', str(carreras_val))
         if m:
             return int(m.group(0))
 
-    if match_type and "individual" in match_type.lower():
-        return 1
-
     for k, v in rule_values.items():
-        if "carrera" in str(k).lower():
+        if "carrera" in str(k).lower() or "ronda" in str(k).lower():
             m = re.search(r'\d+', str(v))
             if m:
                 return int(m.group(0))
@@ -136,6 +142,35 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_match_scores_match ON match_scores(match_id);
     CREATE INDEX IF NOT EXISTS idx_match_scores_player ON match_scores(player_id);
 
+    CREATE TABLE IF NOT EXISTS match_races (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_id INTEGER NOT NULL,
+        race_number INTEGER NOT NULL,
+        cup_name TEXT,
+        track_name TEXT NOT NULL,
+        class_mode TEXT,
+        played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS match_race_scores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        race_id INTEGER NOT NULL,
+        match_id INTEGER NOT NULL,
+        player_id INTEGER NOT NULL,
+        position INTEGER NOT NULL,
+        points REAL NOT NULL DEFAULT 0.0,
+        FOREIGN KEY (race_id) REFERENCES match_races(id) ON DELETE CASCADE,
+        FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
+        FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_match_races_match ON match_races(match_id);
+    CREATE INDEX IF NOT EXISTS idx_match_races_track ON match_races(track_name);
+    CREATE INDEX IF NOT EXISTS idx_match_race_scores_race ON match_race_scores(race_id);
+    CREATE INDEX IF NOT EXISTS idx_match_race_scores_match ON match_race_scores(match_id);
+    CREATE INDEX IF NOT EXISTS idx_match_race_scores_player ON match_race_scores(player_id);
+
     CREATE TABLE IF NOT EXISTS email_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         recipient TEXT NOT NULL,
@@ -178,32 +213,53 @@ def init_db():
     """)
     conn.commit()
 
-    # Seed default games if table is empty
+    # Seed default games if table is empty, or upgrade rule_settings for dynamic match types
     cursor.execute("SELECT COUNT(*) AS cnt FROM games")
     count = cursor.fetchone()["cnt"]
-    if count == 0 and DEFAULT_GAMES_PATH.exists():
+    if DEFAULT_GAMES_PATH.exists():
         with open(DEFAULT_GAMES_PATH, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
             games_list = data.get("games", [])
-            for g in games_list:
-                cursor.execute("""
-                INSERT INTO games (
-                    id, name, icon, description, scoring_type,
-                    default_points_system_json, match_types_json,
-                    rule_settings_json, player_metrics_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    g["id"],
-                    g["name"],
-                    g.get("icon", "🎮"),
-                    g.get("description", ""),
-                    g.get("scoring_type", "points_high"),
-                    json.dumps(g.get("default_points_system", [])),
-                    json.dumps(g.get("match_types", [])),
-                    json.dumps(g.get("rule_settings", [])),
-                    json.dumps(g.get("player_metrics", []))
-                ))
-            conn.commit()
+            if count == 0:
+                for g in games_list:
+                    cursor.execute("""
+                    INSERT INTO games (
+                        id, name, icon, description, scoring_type,
+                        default_points_system_json, match_types_json,
+                        rule_settings_json, player_metrics_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        g["id"],
+                        g["name"],
+                        g.get("icon", "🎮"),
+                        g.get("description", ""),
+                        g.get("scoring_type", "points_high"),
+                        json.dumps(g.get("default_points_system", [])),
+                        json.dumps(g.get("match_types", [])),
+                        json.dumps(g.get("rule_settings", [])),
+                        json.dumps(g.get("player_metrics", []))
+                    ))
+                conn.commit()
+            else:
+                for g in games_list:
+                    cursor.execute("SELECT rule_settings_json FROM games WHERE id = ?", (g["id"],))
+                    row = cursor.fetchone()
+                    if row:
+                        try:
+                            existing_rules = json.loads(row["rule_settings_json"] or "[]")
+                            has_dynamic = any("match_types" in r for r in existing_rules if isinstance(r, dict))
+                            if not has_dynamic:
+                                cursor.execute("""
+                                UPDATE games SET match_types_json = ?, rule_settings_json = ?
+                                WHERE id = ?
+                                """, (
+                                    json.dumps(g.get("match_types", [])),
+                                    json.dumps(g.get("rule_settings", [])),
+                                    g["id"]
+                                ))
+                        except Exception:
+                            pass
+                conn.commit()
 
     # Migration: Ensure email column exists in players table
     try:

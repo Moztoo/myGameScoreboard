@@ -103,12 +103,27 @@ class MatchScoreInput(BaseModel):
     metrics: Dict[str, Any] = Field(default_factory=dict)
 
 
+class RaceScoreInput(BaseModel):
+    player_id: int
+    position: int = 1
+    points: float = 0.0
+
+
+class MatchRaceInput(BaseModel):
+    race_number: int
+    cup_name: Optional[str] = None
+    track_name: str
+    class_mode: Optional[str] = None
+    scores: List[RaceScoreInput] = Field(default_factory=list)
+
+
 class MatchCreate(BaseModel):
     match_type: str
     rule_values: Dict[str, Any] = Field(default_factory=dict)
     is_practice: bool = False
     notes: Optional[str] = None
     scores: List[MatchScoreInput] = Field(default_factory=list)
+    races: List[MatchRaceInput] = Field(default_factory=list)
 
 
 class MatchResponse(BaseModel):

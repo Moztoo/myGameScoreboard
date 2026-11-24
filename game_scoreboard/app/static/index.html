@@ -16,7 +16,7 @@
     }
   </script>
   <!-- Local Critical CSS First -->
-  <link rel="stylesheet" href="static/css/styles.css?v=1.0.14">
+  <link rel="stylesheet" href="static/css/styles.css?v=1.1.0">
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Tailwind CSS CDN -->
@@ -60,7 +60,7 @@
           <div>
             <div class="flex items-center gap-1.5">
               <span class="text-sm sm:text-base font-black tracking-tight text-white">Game Scoreboard</span>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.0.14</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.1.0</span>
             </div>
             <p class="text-[10px] sm:text-xs text-slate-400">Torneos y Partidas entre Amigos</p>
           </div>
@@ -247,6 +247,54 @@
               <tr><td colspan="9" class="text-center py-8 text-slate-500">Cargando datos...</td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Track & Class Performance Analytics -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <!-- Performance by Class (150cc, 200cc, Espejo) -->
+        <div class="lg:col-span-5 bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-5 shadow-lg space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+            <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-1.5">
+              <span>⚙️</span> Desempeño por Clase / Modo
+            </h2>
+            <span class="text-[11px] text-slate-400">150cc · 200cc · Espejo</span>
+          </div>
+          <div id="dash-class-stats-list" class="space-y-2.5">
+            <div class="text-center py-6 text-slate-500 text-xs">Cargando estadísticas por clase...</div>
+          </div>
+        </div>
+
+        <!-- Performance by Track / Cup -->
+        <div class="lg:col-span-7 bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-5 shadow-lg space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+            <div>
+              <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-1.5">
+                <span>🗺️</span> Dominio por Pista y Copa
+              </h2>
+              <p class="text-[11px] text-slate-400">Estadísticas acumuladas de las carreras capturadas pista por pista</p>
+            </div>
+            <select id="dash-track-player-filter" onchange="renderTrackAnalyticsTable()" class="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+              <option value="">Todos los Jugadores (Rey de la Pista)</option>
+            </select>
+          </div>
+          <div class="overflow-x-auto max-h-80 overflow-y-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-950/80 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0">
+                <tr>
+                  <th class="py-2 px-3">Pista / Copa</th>
+                  <th class="py-2 px-2 text-center">Veces</th>
+                  <th class="py-2 px-3" id="dash-track-col-leader">Dominador / Jugador</th>
+                  <th class="py-2 px-2 text-center">1º Lugares</th>
+                  <th class="py-2 px-2 text-center">Pos. Prom</th>
+                  <th class="py-2 px-3 text-right">Pts Prom</th>
+                </tr>
+              </thead>
+              <tbody id="dash-track-stats-body" class="divide-y divide-slate-800/60">
+                <tr><td colspan="6" class="text-center py-6 text-slate-500">Registra carreras en Modo Captura para ver estadísticas por pista.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -661,98 +709,256 @@
 
 
   <!-- ===================================================================== -->
-  <!-- MODAL / INLINE DRAWER: REGISTRAR O EDITAR PARTIDA                    -->
+  <!-- MODAL / INLINE DRAWER: REGISTRAR O EDITAR PARTIDA + MODO CAPTURA      -->
   <!-- ===================================================================== -->
-  <div id="modal-match" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
-      <div class="flex items-center justify-between">
+  <div id="modal-match" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full p-4 sm:p-6 shadow-2xl space-y-4 max-h-[94vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <div>
           <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2" id="match-modal-title">
             <span>🏁</span> Registrar Partida
           </h3>
-          <p class="text-xs text-slate-400" id="match-modal-subtitle">Asigna puntos y configura reglas.</p>
+          <p class="text-xs text-slate-400" id="match-modal-subtitle">Configura el tipo de partida y sus parámetros.</p>
         </div>
         <button onclick="closeModal('modal-match')" class="text-slate-400 hover:text-white text-2xl p-1 leading-none">&times;</button>
       </div>
 
-      <form id="form-new-match" onsubmit="handleCreateOrUpdateMatch(event)" class="space-y-4">
-        <!-- Match Type & Practice Flag -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <!-- ================================================================= -->
+      <!-- STEP 1: DEFINIR PARTIDA (CONFIGURACIÓN DINÁMICA)                  -->
+      <!-- ================================================================= -->
+      <div id="match-step-config">
+        <form id="form-new-match" onsubmit="handleCreateOrUpdateMatch(event)" class="space-y-4">
+          <!-- Match Type & Practice Flag -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Tipo de Partida</label>
+              <select id="match-type-select" onchange="onMatchTypeChange()" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              </select>
+            </div>
+
+            <div class="flex items-center pt-2 sm:pt-5">
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="match-is-practice" class="sr-only peer">
+                <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                <span class="ml-2.5 text-xs font-medium text-amber-400">¿Partida de Práctica?</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Dynamic Game Rules Selectors (Cambia dinámicamente según el Tipo de Partida) -->
+          <div id="match-game-rules-section" class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                <span>🎛️</span> Parámetros Dinámicos de la Partida
+              </div>
+              <span id="match-rules-mode-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Configuración</span>
+            </div>
+            <div id="match-dynamic-rules-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+            </div>
+          </div>
+
+          <!-- Selection of Active Players in this Match -->
+          <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <label class="text-[11px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                <span>👥</span> ¿Quiénes juegan esta partida?
+              </label>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="toggleAllMatchParticipants(true)" class="text-[10px] text-slate-400 hover:text-indigo-300 underline">Todos</button>
+                <span class="text-slate-600 text-xs">·</span>
+                <button type="button" onclick="toggleAllMatchParticipants(false)" class="text-[10px] text-slate-400 hover:text-indigo-300 underline">Ninguno</button>
+                <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 ml-1" id="match-participants-count">0 jugadores</span>
+              </div>
+            </div>
+            <div id="match-participants-selector-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            </div>
+          </div>
+
+          <!-- Player Characters / Optional Direct Scores Table -->
           <div>
-            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Tipo de Partida</label>
-            <select id="match-type-select" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-            </select>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-semibold uppercase text-slate-400" id="match-players-table-label">Personajes y Puntajes</label>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="toggleManualScoreTable()" id="btn-toggle-manual-scores" class="text-[10px] font-semibold text-slate-400 hover:text-indigo-300 underline">
+                  Mostrar / Editar Puntaje Final Directo
+                </button>
+                <div id="mk-auto-rank-banner" class="hidden text-[10px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span>🏎️</span> Auto-ranking
+                </div>
+              </div>
+            </div>
+            <div class="bg-slate-950/60 rounded-xl border border-slate-800 overflow-x-auto w-full">
+              <table class="w-full text-left text-xs min-w-[340px]">
+                <thead class="bg-slate-900 text-slate-400 uppercase border-b border-slate-800 text-[10px]">
+                  <tr>
+                    <th class="py-2 px-2.5">Jugador</th>
+                    <th class="py-2 px-2.5 w-16 text-center manual-score-col">Lugar</th>
+                    <th class="py-2 px-2.5 w-20 text-center manual-score-col">Puntos</th>
+                    <th class="py-2 px-2.5" id="match-extra-metric-th">Personaje</th>
+                  </tr>
+                </thead>
+                <tbody id="match-players-scores-body" class="divide-y divide-slate-800">
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div class="flex items-center pt-2 sm:pt-5">
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" id="match-is-practice" class="sr-only peer">
-              <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
-              <span class="ml-2.5 text-xs font-medium text-amber-400">¿Partida de Práctica?</span>
-            </label>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Notas Opcionales</label>
+            <input type="text" id="match-notes" placeholder="ej. Remontada épica" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
           </div>
-        </div>
 
-        <!-- Dynamic Game Rules Selectors (Mario Kart 8 fields from TV photo) -->
-        <div id="match-game-rules-section" class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2.5">
-          <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-            <span>🎛️</span> Parámetros de la Partida (Reglas)
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-800">
+            <button type="button" onclick="closeModal('modal-match')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-medium">Cancelar</button>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <button type="submit" id="btn-save-match" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold transition">
+                💾 Guardar Puntaje Manual
+              </button>
+              <button type="button" id="btn-start-capture-mode" onclick="startCaptureMode()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition">
+                <span>🎮</span> Iniciar Modo Captura (Carrera por Carrera) →
+              </button>
+            </div>
           </div>
-          <div id="match-dynamic-rules-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-          </div>
-        </div>
+        </form>
+      </div>
 
-        <!-- Selection of Active Players in this Match -->
-        <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2.5">
-          <div class="flex items-center justify-between">
-            <label class="text-[11px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-              <span>👥</span> ¿Quiénes juegan esta partida?
-            </label>
+      <!-- ================================================================= -->
+      <!-- STEP 2: MODO CAPTURA RÁPIDA (CARRERA POR CARRERA)                 -->
+      <!-- ================================================================= -->
+      <div id="match-step-capture" class="hidden space-y-4">
+        <!-- Header & Progress Bar -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center gap-2">
-              <button type="button" onclick="toggleAllMatchParticipants(true)" class="text-[10px] text-slate-400 hover:text-indigo-300 underline">Todos</button>
-              <span class="text-slate-600 text-xs">·</span>
-              <button type="button" onclick="toggleAllMatchParticipants(false)" class="text-[10px] text-slate-400 hover:text-indigo-300 underline">Ninguno</button>
-              <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 ml-1" id="match-participants-count">0 jugadores</span>
+              <span class="px-3 py-1 rounded-xl bg-indigo-600 text-white font-black text-xs sm:text-sm shadow" id="capture-race-counter">Carrera 1 de 4</span>
+              <span class="text-xs text-slate-300 font-semibold" id="capture-rules-summary">150cc · Torneo</span>
+            </div>
+            <button type="button" onclick="returnToMatchConfig()" class="text-[11px] text-slate-400 hover:text-white bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+              ⚙️ Cambiar Reglas
+            </button>
+          </div>
+          <!-- Race Pills Navigator -->
+          <div id="capture-race-pills" class="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5">
+          </div>
+        </div>
+
+        <!-- Track Selection Section -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🗺️</span>
+              <div>
+                <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-400">Pista de esta Carrera</div>
+                <div class="text-sm sm:text-base font-black text-white" id="capture-current-track-display">Selecciona una pista</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span id="capture-track-auto-badge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                ✨ Asignada por Copa
+              </span>
+              <button type="button" id="btn-toggle-track-picker" onclick="toggleCaptureTrackPicker()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-indigo-300 font-semibold border border-slate-700">
+                Cambiar Pista
+              </button>
+              <button type="button" onclick="pickRandomMarioKartTrack()" class="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-xs text-amber-300 font-semibold border border-amber-500/30" title="Elegir pista al azar">
+                🎲 Al Azar
+              </button>
             </div>
           </div>
-          <div id="match-participants-selector-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-          </div>
-        </div>
 
-        <!-- Player Scores Table -->
-        <div>
-          <div class="flex items-center justify-between mb-1.5">
-            <label class="block text-xs font-semibold uppercase text-slate-400">Puntos y Posiciones</label>
-            <div id="mk-auto-rank-banner" class="hidden text-[10px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <span>🏎️</span> Auto-ranking activo por puntaje
+          <!-- Interactive Cup & Track Picker -->
+          <div id="capture-track-picker-panel" class="space-y-2.5 pt-2 border-t border-slate-800/80">
+            <div class="flex items-center gap-2">
+              <input type="text" id="capture-track-search" oninput="filterCaptureTracks(this.value)" placeholder="🔍 Buscar pista por nombre (ej. Arco Iris, Delfín, Waluigi, Bebé)..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <!-- Cup Pills -->
+            <div id="capture-cups-grid" class="flex items-center gap-1.5 overflow-x-auto pb-1.5">
+            </div>
+            <!-- Tracks of Selected Cup or Search Results -->
+            <div id="capture-tracks-buttons" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             </div>
           </div>
-          <div class="bg-slate-950/60 rounded-xl border border-slate-800 overflow-x-auto w-full">
-            <table class="w-full text-left text-xs min-w-[340px]">
-              <thead class="bg-slate-900 text-slate-400 uppercase border-b border-slate-800 text-[10px]">
-                <tr>
-                  <th class="py-2 px-2.5">Jugador</th>
-                  <th class="py-2 px-2.5 w-16 text-center">Lugar</th>
-                  <th class="py-2 px-2.5 w-20 text-center">Puntos</th>
-                  <th class="py-2 px-2.5" id="match-extra-metric-th">Personaje</th>
-                </tr>
-              </thead>
-              <tbody id="match-players-scores-body" class="divide-y divide-slate-800">
-              </tbody>
-            </table>
+        </div>
+
+        <!-- Players Position Quick Buttons -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+              <span>🏆</span> ¿En qué lugar llegó cada jugador? (Calcula puntos automáticamente)
+            </div>
+            <span class="text-[10px] text-slate-400">1º=15 · 2º=12 · 3º=10 · 4º=9...</span>
+          </div>
+          <div id="capture-players-positions-list" class="space-y-2.5">
           </div>
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Notas Opcionales</label>
-          <input type="text" id="match-notes" placeholder="ej. Remontada épica" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <!-- Live Match Standings / Cup Burndown Preview -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+              <span>📊</span> Acumulado de la Partida en Vivo (Burndown)
+            </div>
+            <span class="text-[10px] text-slate-400" id="capture-live-races-completed">1 carrera contabilizada</span>
+          </div>
+          <div id="capture-live-standings-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          </div>
         </div>
 
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="closeModal('modal-match')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm font-medium">Cancelar</button>
-          <button type="submit" id="btn-save-match" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30">Guardar Partida</button>
+        <!-- Capture Mode Navigation Footer -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800">
+          <div class="flex items-center gap-2">
+            <button type="button" id="btn-capture-prev-race" onclick="capturePrevRace()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
+              ← Carrera Anterior
+            </button>
+            <button type="button" id="btn-capture-finish-early" onclick="finishCaptureMatchNow()" class="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition" title="Terminar y guardar la partida con las carreras capturadas hasta ahora">
+              💾 Terminar Partida Aquí
+            </button>
+          </div>
+          <button type="button" id="btn-capture-next-race" onclick="captureNextOrFinishRace()" class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-black shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition">
+            <span>Continuar a Carrera 2</span> <span>→</span>
+          </button>
         </div>
-      </form>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- STEP 3: FIN DE PARTIDA (RESUMEN, BURNDOWN Y SIGUIENTE ACCIÓN)     -->
+      <!-- ================================================================= -->
+      <div id="match-step-finished" class="hidden space-y-4">
+        <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-950/60 via-slate-900 to-emerald-950/40 border border-indigo-500/30 text-center space-y-2">
+          <div class="text-3xl">🏆</div>
+          <h4 class="text-lg font-black text-white" id="finished-match-headline">¡Partida Finalizada!</h4>
+          <p class="text-xs text-slate-300" id="finished-match-subheadline">Resultados guardados y sumados a la sesión.</p>
+          <div id="finished-match-podium-cards" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 text-left">
+          </div>
+        </div>
+
+        <!-- Burndown Chart of the Just-Completed Cup/Match -->
+        <div id="finished-match-burndown-container" class="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+          <div class="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span>📈</span> Burndown de la Copa (Evolución Carrera por Carrera)
+          </div>
+          <div class="relative w-full h-52">
+            <canvas id="post-match-burndown-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Decision Prompt: Create New Match or Close Session -->
+        <div class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-3">
+          <div class="text-xs font-bold uppercase tracking-wider text-center text-slate-300">
+            ¿Qué deseas hacer a continuación?
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <button type="button" onclick="startAnotherMatchFromFinished()" class="p-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition">
+              <span>🏎️</span> Crear Nueva Partida
+            </button>
+            <button type="button" onclick="closeSessionFromFinished()" class="p-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-amber-600/30 flex items-center justify-center gap-2 transition">
+              <span>🏁</span> Cerrar / Finalizar Sesión
+            </button>
+            <button type="button" onclick="closeModal('modal-match')" class="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs sm:text-sm border border-slate-700 flex items-center justify-center gap-2 transition">
+              <span>📊</span> Ver Sesión
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -972,6 +1178,6 @@
   </div>
 
   <!-- JavaScript Code: loaded with relative path supported by <base> -->
-  <script src="static/js/app.js?v=1.0.14"></script>
+  <script src="static/js/app.js?v=1.1.0"></script>
 </body>
 </html>

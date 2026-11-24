@@ -1,7 +1,7 @@
 name: "Game Scoreboard"
 slug: "game_scoreboard"
 description: "Scoreboard nativo para torneos y partidas de videojuegos entre amigos. Registro de sesiones, partidas de práctica, avatares y estadísticas."
-version: "1.0.14"
+version: "1.1.0"
 init: false
 arch:
   - aarch64

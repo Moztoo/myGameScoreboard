@@ -740,6 +740,18 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
                 </tr>
                 """
 
+            races_summary_html = ""
+            if m.get("races"):
+                race_items = []
+                for r in m.get("races", []):
+                    r_winner = next((rs for rs in r.get("scores", []) if rs.get("position") == 1), None)
+                    w_txt = f" · 🥇 {r_winner.get('player_nickname') or r_winner.get('player_name')}" if r_winner else ""
+                    race_items.append(
+                        f'<span style="display:inline-block; margin: 2px 3px; padding: 3px 7px; border-radius: 6px; background-color: #0f172a; border: 1px solid #1e293b; font-size: 10px; color: #cbd5e1;">'
+                        f'<strong style="color:#38bdf8;">C{r.get("race_number")}:</strong> {r.get("track_name")}{w_txt}</span>'
+                    )
+                races_summary_html = f'<div style="padding: 8px 12px; border-top: 1px solid #14203d; background-color: #080e1f;">{" ".join(race_items)}</div>'
+
             matches_html += f"""
             <div style="background-color: #0b1329; border: 1px solid #1e293b; border-radius: 14px; margin-bottom: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0f1b38; border-bottom: 1px solid #1e293b;">
@@ -762,6 +774,7 @@ def render_session_email(session: Dict[str, Any], template: Dict[str, Any]) -> t
                   {scores_rows_html}
                 </tbody>
               </table>
+              {races_summary_html}
             </div>
             """
 

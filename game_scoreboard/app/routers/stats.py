@@ -358,3 +358,205 @@ def get_timeline(game_id: Optional[str] = None, include_practice: bool = False, 
         "total_races": total_races_timeline,
         "player_races": player_cum_races
     }
+
+
+@router.get("/tracks")
+def get_tracks_and_classes_stats(game_id: Optional[str] = None, include_practice: bool = False):
+    """Return performance analytics per track/cup and per class (150cc, 200cc, Espejo, etc.)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 1. Track-level stats from match_races + match_race_scores
+    track_query = """
+    SELECT
+        mr.id AS race_id,
+        mr.cup_name,
+        mr.track_name,
+        mr.class_mode,
+        m.rule_values_json,
+        mrs.player_id,
+        mrs.position,
+        mrs.points,
+        p.name AS player_name,
+        p.nickname AS player_nickname,
+        p.color_hex
+    FROM match_race_scores mrs
+    JOIN match_races mr ON mrs.race_id = mr.id
+    JOIN matches m ON mr.match_id = m.id
+    JOIN sessions s ON m.session_id = s.id
+    JOIN players p ON mrs.player_id = p.id
+    WHERE 1=1
+    """
+    t_params = []
+    if not include_practice:
+        track_query += " AND m.is_practice = 0"
+    if game_id:
+        track_query += " AND s.game_id = ?"
+        t_params.append(game_id)
+
+    cursor.execute(track_query, t_params)
+    race_score_rows = cursor.fetchall()
+
+    tracks_map: Dict[str, Any] = {}
+    for row in race_score_rows:
+        t_name = row["track_name"] or "Pista Desconocida"
+        if t_name not in tracks_map:
+            tracks_map[t_name] = {
+                "track_name": t_name,
+                "cup_name": row["cup_name"] or "",
+                "race_ids": set(),
+                "players": {}
+            }
+        t_entry = tracks_map[t_name]
+        if row["cup_name"] and not t_entry["cup_name"]:
+            t_entry["cup_name"] = row["cup_name"]
+        t_entry["race_ids"].add(row["race_id"])
+
+        pid = row["player_id"]
+        if pid not in t_entry["players"]:
+            t_entry["players"][pid] = {
+                "player_id": pid,
+                "name": row["player_name"],
+                "nickname": row["player_nickname"] or row["player_name"],
+                "color_hex": row["color_hex"] or "#6366f1",
+                "races": 0,
+                "wins": 0,
+                "podiums": 0,
+                "pos_sum": 0,
+                "points_sum": 0.0
+            }
+        p_stat = t_entry["players"][pid]
+        p_stat["races"] += 1
+        p_stat["pos_sum"] += row["position"]
+        p_stat["points_sum"] = round(p_stat["points_sum"] + row["points"], 1)
+        if row["position"] == 1:
+            p_stat["wins"] += 1
+        if row["position"] <= 3:
+            p_stat["podiums"] += 1
+
+    track_stats = []
+    for t_name, t_data in tracks_map.items():
+        players_list = []
+        for pid, ps in t_data["players"].items():
+            avg_pos = round(ps["pos_sum"] / ps["races"], 2) if ps["races"] > 0 else 0
+            avg_pts = round(ps["points_sum"] / ps["races"], 1) if ps["races"] > 0 else 0
+            players_list.append({
+                "player_id": pid,
+                "name": ps["name"],
+                "nickname": ps["nickname"],
+                "color_hex": ps["color_hex"],
+                "races": ps["races"],
+                "wins": ps["wins"],
+                "podiums": ps["podiums"],
+                "avg_position": avg_pos,
+                "avg_points": avg_pts,
+                "total_points": ps["points_sum"]
+            })
+        players_list.sort(key=lambda x: (-x["wins"], x["avg_position"], -x["avg_points"]))
+        track_stats.append({
+            "track_name": t_name,
+            "cup_name": t_data["cup_name"],
+            "times_played": len(t_data["race_ids"]),
+            "best_player": players_list[0] if players_list else None,
+            "players": players_list
+        })
+    track_stats.sort(key=lambda x: (-x["times_played"], x["track_name"]))
+
+    # 2. Class-level stats (150cc, 200cc, Carrera espejo, etc.) from matches + match_scores
+    class_query = """
+    SELECT
+        m.id AS match_id,
+        m.match_type,
+        m.rule_values_json,
+        ms.player_id,
+        ms.score,
+        ms.rank_position,
+        p.name AS player_name,
+        p.nickname AS player_nickname,
+        p.color_hex,
+        (SELECT COUNT(*) FROM match_races mr WHERE mr.match_id = m.id) AS rec_races
+    FROM match_scores ms
+    JOIN matches m ON ms.match_id = m.id
+    JOIN sessions s ON m.session_id = s.id
+    JOIN players p ON ms.player_id = p.id
+    WHERE 1=1
+    """
+    c_params = []
+    if not include_practice:
+        class_query += " AND m.is_practice = 0"
+    if game_id:
+        class_query += " AND s.game_id = ?"
+        c_params.append(game_id)
+
+    cursor.execute(class_query, c_params)
+    classes_map: Dict[str, Any] = {}
+    for row in cursor.fetchall():
+        rules = json.loads(row["rule_values_json"] or "{}")
+        clase = rules.get("clase") or rules.get("formato") or rules.get("duracion_tiempo") or "Estándar"
+        m_races = get_match_race_count(rules, row["match_type"], row["rec_races"])
+
+        if clase not in classes_map:
+            classes_map[clase] = {
+                "class_mode": clase,
+                "match_ids": set(),
+                "match_races_by_id": {},
+                "players": {}
+            }
+        c_entry = classes_map[clase]
+        c_entry["match_ids"].add(row["match_id"])
+        c_entry["match_races_by_id"][row["match_id"]] = m_races
+
+        pid = row["player_id"]
+        if pid not in c_entry["players"]:
+            c_entry["players"][pid] = {
+                "player_id": pid,
+                "name": row["player_name"],
+                "nickname": row["player_nickname"] or row["player_name"],
+                "color_hex": row["color_hex"] or "#6366f1",
+                "matches": 0,
+                "races": 0,
+                "wins": 0,
+                "rank_sum": 0,
+                "total_points": 0.0
+            }
+        ps = c_entry["players"][pid]
+        ps["matches"] += 1
+        ps["races"] += m_races
+        ps["rank_sum"] += row["rank_position"]
+        ps["total_points"] = round(ps["total_points"] + row["score"], 1)
+        if row["rank_position"] == 1:
+            ps["wins"] += 1
+
+    class_stats = []
+    for c_mode, c_data in classes_map.items():
+        standings = []
+        for pid, ps in c_data["players"].items():
+            avg_rank = round(ps["rank_sum"] / ps["matches"], 2) if ps["matches"] > 0 else 0
+            win_rate = round(ps["wins"] / ps["matches"] * 100, 1) if ps["matches"] > 0 else 0
+            standings.append({
+                "player_id": pid,
+                "name": ps["name"],
+                "nickname": ps["nickname"],
+                "color_hex": ps["color_hex"],
+                "matches": ps["matches"],
+                "races": ps["races"],
+                "wins": ps["wins"],
+                "win_rate": win_rate,
+                "avg_rank": avg_rank,
+                "total_points": ps["total_points"]
+            })
+        standings.sort(key=lambda x: (-x["wins"], -x["total_points"], x["avg_rank"]))
+        class_stats.append({
+            "class_mode": c_mode,
+            "matches_count": len(c_data["match_ids"]),
+            "races_count": sum(c_data["match_races_by_id"].values()),
+            "leader": standings[0] if standings else None,
+            "standings": standings
+        })
+    class_stats.sort(key=lambda x: (-x["races_count"], -x["matches_count"]))
+
+    conn.close()
+    return {
+        "track_stats": track_stats,
+        "class_stats": class_stats
+    }

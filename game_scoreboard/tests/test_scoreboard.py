@@ -435,3 +435,108 @@ def test_monthly_mario_kart_template_and_timeline_stats():
     assert "cid:tournament_banner" in html
     assert "Resumen Mensual" in plain
     assert "carreras" in html.lower() or "carr." in html.lower()
+
+
+def test_capture_mode_races_burndown_and_track_analytics():
+    """Verify dynamic rule_settings per match_type, race-by-race Capture Mode storage, burndown, and /api/stats/tracks."""
+    # 1. Check Mario Kart 8 dynamic rule_settings have match_types and 24 cups
+    mk_res = client.get("/api/games/mario_kart_8")
+    assert mk_res.status_code == 200
+    mk_game = mk_res.json()
+    assert "Copa Grand Prix (4 Carreras)" in mk_game["match_types"]
+    copa_rule = next((r for r in mk_game["rule_settings"] if r["id"] == "copa"), None)
+    assert copa_rule is not None
+    assert len(copa_rule["options"]) >= 24
+
+    # 2. Create two players and a session
+    p1 = client.post("/api/players", json={"name": "Mozto", "nickname": "Mozto", "color_hex": "#6366f1"}).json()
+    p2 = client.post("/api/players", json={"name": "Ray", "nickname": "Ray", "color_hex": "#10b981"}).json()
+
+    sess = client.post("/api/sessions", json={
+        "game_id": "mario_kart_8",
+        "title": "Noche de Copa Champiñón",
+        "player_ids": [p1["id"], p2["id"]]
+    }).json()
+
+    # 3. Record a 4-race Grand Prix match using Capture Mode races payload
+    races_payload = [
+        {
+            "race_number": 1,
+            "cup_name": "🍄 Copa Champiñón",
+            "track_name": "Estadio Mario Kart",
+            "class_mode": "150cc",
+            "scores": [
+                {"player_id": p1["id"], "position": 1, "points": 15},
+                {"player_id": p2["id"], "position": 2, "points": 12}
+            ]
+        },
+        {
+            "race_number": 2,
+            "cup_name": "🍄 Copa Champiñón",
+            "track_name": "Parque Acuático",
+            "class_mode": "150cc",
+            "scores": [
+                {"player_id": p1["id"], "position": 2, "points": 12},
+                {"player_id": p2["id"], "position": 1, "points": 15}
+            ]
+        },
+        {
+            "race_number": 3,
+            "cup_name": "🍄 Copa Champiñón",
+            "track_name": "Barranco Goloso",
+            "class_mode": "150cc",
+            "scores": [
+                {"player_id": p1["id"], "position": 1, "points": 15},
+                {"player_id": p2["id"], "position": 3, "points": 10}
+            ]
+        },
+        {
+            "race_number": 4,
+            "cup_name": "🍄 Copa Champiñón",
+            "track_name": "Ruinas Roca Picuda",
+            "class_mode": "150cc",
+            "scores": [
+                {"player_id": p1["id"], "position": 1, "points": 15},
+                {"player_id": p2["id"], "position": 2, "points": 12}
+            ]
+        }
+    ]
+
+    match_res = client.post(f"/api/sessions/{sess['id']}/matches", json={
+        "match_type": "Copa Grand Prix (4 Carreras)",
+        "rule_values": {"clase": "150cc", "copa": "🍄 Copa Champiñón"},
+        "is_practice": False,
+        "scores": [
+            {"player_id": p1["id"], "score": 0, "rank_position": 1, "metrics": {"character": "Shy Guy"}},
+            {"player_id": p2["id"], "score": 0, "rank_position": 2, "metrics": {"character": "Peach"}}
+        ],
+        "races": races_payload
+    })
+    assert match_res.status_code == 200
+    updated_sess = match_res.json()
+    assert len(updated_sess["matches"]) == 1
+    saved_match = updated_sess["matches"][0]
+    assert saved_match["race_count"] == 4
+    assert len(saved_match["races"]) == 4
+
+    # Verify auto-summed scores (p1 = 15+12+15+15 = 57, p2 = 12+15+10+12 = 49)
+    s1 = next(s for s in saved_match["scores"] if s["player_id"] == p1["id"])
+    s2 = next(s for s in saved_match["scores"] if s["player_id"] == p2["id"])
+    assert s1["score"] == 57.0
+    assert s1["rank_position"] == 1
+    assert s2["score"] == 49.0
+    assert s2["rank_position"] == 2
+
+    # Verify cumulative burndown points on race 4
+    r4_p1 = next(rs for rs in saved_match["races"][3]["scores"] if rs["player_id"] == p1["id"])
+    assert r4_p1["cumulative_points"] == 57.0
+
+    # 4. Verify /api/stats/tracks analytics endpoint
+    trk_res = client.get("/api/stats/tracks?game_id=mario_kart_8")
+    assert trk_res.status_code == 200
+    trk_data = trk_res.json()
+    assert "track_stats" in trk_data
+    assert "class_stats" in trk_data
+    assert len(trk_data["track_stats"]) >= 4
+    assert any(t["track_name"] == "Estadio Mario Kart" for t in trk_data["track_stats"])
+    assert any(c["class_mode"] == "150cc" for c in trk_data["class_stats"])
