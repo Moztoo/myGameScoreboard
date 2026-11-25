@@ -2,6 +2,14 @@
 
 Todos los cambios importantes de este Add-on para Home Assistant se documentan en este archivo.
 
+## [1.1.2] - 2026-11-24
+### 🎨 Mejoras de UX / Selección Rápida
+- **Selector Directo de Personajes con Iconos (Sin Dropdown):**
+  - Se reemplazó la lista desplegable (`<select>`) de personajes por una **cuadrícula visual directa de iconos oficiales** de Mario Kart 8 Deluxe para selección rápida a un solo toque.
+  - Pre-selección inteligente del último personaje utilizado por cada jugador en la sesión actual.
+
+---
+
 ## [1.1.1] - 2026-11-24
 ### ✨ Novedades
 - **Iconos Oficiales de Mario Kart 8 Deluxe:**

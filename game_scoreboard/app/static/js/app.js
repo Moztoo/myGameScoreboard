@@ -1479,10 +1479,22 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
 
   const hiddenClass = showManualScoresInConfig ? '' : 'hidden';
 
+  // Auto-detect last used character per player in this session for instant default selection
+  const lastCharacterByPlayer = {};
+  if (currentRecordingSession && Array.isArray(currentRecordingSession.matches)) {
+    currentRecordingSession.matches.forEach(m => {
+      (m.scores || []).forEach(sc => {
+        if (sc.metrics && sc.metrics.character) {
+          lastCharacterByPlayer[sc.player_id] = sc.metrics.character;
+        }
+      });
+    });
+  }
+
   scoresBody.innerHTML = selectedPlayers.map((p, idx) => {
     let rankVal = idx + 1;
     let scoreVal = currentGameDefaultPoints[idx] !== undefined ? currentGameDefaultPoints[idx] : 0;
-    let metricVal = preservedMetrics[p.id] || '';
+    let metricVal = preservedMetrics[p.id] || lastCharacterByPlayer[p.id] || '';
 
     if (existingScoresMap && existingScoresMap[p.id]) {
       rankVal = existingScoresMap[p.id].rank_position;
@@ -1491,33 +1503,38 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
     }
 
     let metricInput = `<input type="text" name="metric_${p.id}" value="${metricVal}" placeholder="ej. Mario / Yoshi" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">`;
-    if (currentGameMetricsDef && currentGameMetricsDef.type === 'select' && currentGameMetricsDef.options) {
-      const activeCharVal = metricVal || currentGameMetricsDef.options[0];
-      const charIconUrl = getCharacterIconUrl(activeCharVal);
-      const opts = currentGameMetricsDef.options.map(o => `
-        <option value="${o}" ${o === activeCharVal ? 'selected' : ''}>${o}</option>
-      `).join('');
+    let activeCharBadgeHtml = '';
 
-      const iconGridHtml = isMK
-        ? `<div id="char-icon-picker-${p.id}" class="hidden mt-2 p-2 rounded-xl bg-slate-950 border border-slate-800 grid grid-cols-6 sm:grid-cols-8 gap-1.5 max-h-44 overflow-y-auto">
-            ${currentGameMetricsDef.options.map(o => {
-              const ic = getCharacterIconUrl(o);
-              return `<button type="button" onclick="pickPlayerCharacterFromIcon(${p.id}, '${o.replace(/'/g, "\\'")}')" title="${o}" class="p-1 rounded-lg bg-slate-900 hover:bg-indigo-600/30 border border-slate-800 hover:border-indigo-500 flex flex-col items-center gap-0.5 transition">
-                ${ic ? `<img src="${ic}" alt="${o}" class="w-6 h-6 object-contain">` : `<span class="text-xs">🏎️</span>`}
-                <span class="text-[9px] text-slate-300 truncate w-full text-center">${o}</span>
-              </button>`;
-            }).join('')}
-           </div>`
-        : '';
+    if (currentGameMetricsDef && currentGameMetricsDef.type === 'select' && currentGameMetricsDef.options) {
+      const defaultFallbackChar = currentGameMetricsDef.options[idx % currentGameMetricsDef.options.length] || currentGameMetricsDef.options[0];
+      const activeCharVal = metricVal || defaultFallbackChar;
+      const charIconUrl = getCharacterIconUrl(activeCharVal);
+
+      activeCharBadgeHtml = `
+        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 mt-1 w-fit">
+          <img id="char-preview-img-${p.id}" src="${charIconUrl || ''}" alt="${activeCharVal}" class="w-6 h-6 object-contain flex-shrink-0 ${charIconUrl ? '' : 'hidden'}">
+          <span id="char-preview-label-${p.id}" class="text-[11px] font-black text-indigo-200">${activeCharVal}</span>
+        </div>
+      `;
+
+      const iconButtonsHtml = currentGameMetricsDef.options.map(o => {
+        const ic = getCharacterIconUrl(o);
+        const isSelected = o === activeCharVal;
+        const btnCls = isSelected
+          ? 'bg-indigo-600/35 border-amber-400 ring-1 ring-amber-400/70 text-white font-black shadow-md scale-105'
+          : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-slate-300 hover:border-slate-700';
+        return `<button type="button" data-char-btn="${p.id}" data-char-name="${o}" onclick="pickPlayerCharacterFromIcon(${p.id}, '${o.replace(/'/g, "\\'")}')" title="${o}" class="p-1.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${btnCls}">
+          ${ic ? `<img src="${ic}" alt="${o}" class="w-7 h-7 object-contain pointer-events-none">` : `<span class="text-sm">🏎️</span>`}
+          <span class="text-[9px] leading-tight truncate w-full text-center pointer-events-none">${o}</span>
+        </button>`;
+      }).join('');
 
       metricInput = `
-        <div>
-          <div class="flex items-center gap-2">
-            <img id="char-preview-img-${p.id}" src="${charIconUrl || ''}" alt="${activeCharVal}" class="w-7 h-7 object-contain flex-shrink-0 ${charIconUrl ? '' : 'hidden'}">
-            <select name="metric_${p.id}" onchange="onPlayerCharacterSelectChange(${p.id}, this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500">${opts}</select>
-            ${isMK ? `<button type="button" onclick="toggleCharacterIconGrid(${p.id})" title="Elegir personaje por icono" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs flex-shrink-0">🎭</button>` : ''}
+        <div class="space-y-1.5">
+          <input type="hidden" name="metric_${p.id}" value="${activeCharVal}">
+          <div id="char-icon-picker-${p.id}" class="p-1.5 rounded-xl bg-slate-950/90 border border-slate-800/90 grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-1.5 max-h-36 overflow-y-auto">
+            ${iconButtonsHtml}
           </div>
-          ${iconGridHtml}
         </div>
       `;
     }
@@ -1531,18 +1548,21 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
       : `<input type="number" name="score_${p.id}" value="${scoreVal}" step="any" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-400 font-black">`;
 
     return `
-      <tr class="hover:bg-slate-800/30">
-        <td class="py-2.5 px-3 flex items-center gap-2">
-          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: ${p.color_hex}"></span>
-          <span class="font-bold text-white">${p.nickname || p.name}</span>
+      <tr class="hover:bg-slate-800/20 align-top">
+        <td class="py-2.5 px-3 w-36 sm:w-44">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: ${p.color_hex}"></span>
+            <span class="font-bold text-white text-xs sm:text-sm">${p.nickname || p.name}</span>
+          </div>
+          ${activeCharBadgeHtml}
         </td>
-        <td class="py-2.5 px-3 manual-score-col ${hiddenClass}">
+        <td class="py-2.5 px-2 manual-score-col ${hiddenClass}">
           ${rankInputHtml}
         </td>
-        <td class="py-2.5 px-3 manual-score-col ${hiddenClass}">
+        <td class="py-2.5 px-2 manual-score-col ${hiddenClass}">
           ${scoreInputHtml}
         </td>
-        <td class="py-2.5 px-3">
+        <td class="py-2 px-2.5">
           ${metricInput}
         </td>
       </tr>
@@ -1556,7 +1576,9 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
 
 function onPlayerCharacterSelectChange(playerId, newCharName) {
   const img = document.getElementById(`char-preview-img-${playerId}`);
+  const lbl = document.getElementById(`char-preview-label-${playerId}`);
   const url = getCharacterIconUrl(newCharName);
+  if (lbl) lbl.textContent = newCharName;
   if (img) {
     if (url) {
       img.src = url;
@@ -1568,19 +1590,23 @@ function onPlayerCharacterSelectChange(playerId, newCharName) {
   }
 }
 
-function toggleCharacterIconGrid(playerId) {
-  const grid = document.getElementById(`char-icon-picker-${playerId}`);
-  if (grid) grid.classList.toggle('hidden');
-}
-
 function pickPlayerCharacterFromIcon(playerId, charName) {
-  const sel = document.querySelector(`[name="metric_${playerId}"]`);
-  if (sel) {
-    sel.value = charName;
+  const hiddenInp = document.querySelector(`[name="metric_${playerId}"]`);
+  if (hiddenInp) {
+    hiddenInp.value = charName;
   }
   onPlayerCharacterSelectChange(playerId, charName);
-  const grid = document.getElementById(`char-icon-picker-${playerId}`);
-  if (grid) grid.classList.add('hidden');
+
+  // Update visual selection state on icon buttons without losing scroll position
+  const buttons = document.querySelectorAll(`button[data-char-btn="${playerId}"]`);
+  buttons.forEach(btn => {
+    const isSel = btn.getAttribute('data-char-name') === charName;
+    btn.className = `p-1.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${
+      isSel
+        ? 'bg-indigo-600/35 border-amber-400 ring-1 ring-amber-400/70 text-white font-black shadow-md scale-105'
+        : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-slate-300 hover:border-slate-700'
+    }`;
+  });
 }
 
 function collectCurrentRuleValuesFromDOM() {

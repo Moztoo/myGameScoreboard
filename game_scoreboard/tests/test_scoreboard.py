@@ -545,8 +545,8 @@ def test_capture_mode_races_burndown_and_track_analytics():
     cl_res = client.get("/api/changelog")
     assert cl_res.status_code == 200
     cl_data = cl_res.json()
-    assert cl_data["version"] == "1.1.1"
-    assert "1.1.1" in cl_data["changelog"]
+    assert cl_data["version"] == "1.1.2"
+    assert "1.1.2" in cl_data["changelog"]
 
     char_icon = client.get("/static/img/mk8/characters/mario.png")
     assert char_icon.status_code == 200
