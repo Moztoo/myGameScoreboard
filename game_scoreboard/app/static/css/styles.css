@@ -1,4 +1,28 @@
-/* Critical Utilities: Must work even if external CDN fails */
+/* ============================================================================
+   OMARCHY UI — QUICKSHELL, TILING WM & TUI HIGH-DENSITY DESIGN SYSTEM
+   Themes: Tokyo Night (default), Catppuccin Mocha, Gruvbox Dark, Obsidian Cyan
+   ============================================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --om-bg: #1a1b26;
+  --om-surface: #16161e;
+  --om-elevated: #24283b;
+  --om-border: #292e42;
+  --om-focus: #7aa2f7;
+  --om-text: #c0caf5;
+  --om-muted: #565f89;
+  --om-subtle: #787c99;
+  --om-accent: #7aa2f7;
+  --om-cyan: #7dcfff;
+  --om-green: #9ece6a;
+  --om-amber: #e0af68;
+  --om-red: #f7768e;
+  --om-purple: #bb9af7;
+  --om-mono: "JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace;
+  --om-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
 .hidden {
   display: none !important;
 }
@@ -10,47 +34,173 @@ html, body {
   max-width: 100vw;
   overflow-x: hidden;
   box-sizing: border-box;
+  background-color: var(--om-bg) !important;
+  color: var(--om-text) !important;
+  font-family: var(--om-sans);
 }
 
 *, *::before, *::after {
   box-sizing: inherit;
 }
 
-/* Horizontal scroll bar for tabs and tables */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+/* Tabular numbers & monospace discipline for counters, tables, badges */
+.om-mono,
+table td,
+table th,
+#kpi-matches,
+#kpi-players,
+#kpi-sessions,
+#capture-race-counter,
+#om-live-clock {
+  font-family: var(--om-mono);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Custom Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Remap utility backgrounds & borders to active Omarchy theme tokens */
+.bg-slate-950,
+.bg-slate-950\/60,
+.bg-slate-950\/70,
+.bg-slate-950\/80,
+.bg-slate-950\/85,
+.bg-slate-950\/90 {
+  background-color: var(--om-bg) !important;
 }
-::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+
+.bg-slate-900,
+.bg-slate-900\/80,
+.bg-slate-900\/90,
+.bg-slate-900\/95 {
+  background-color: var(--om-surface) !important;
 }
-::-webkit-scrollbar-thumb {
-  background: rgba(71, 85, 105, 0.6);
+
+.bg-slate-800,
+.bg-slate-800\/50,
+.bg-slate-800\/60,
+.bg-slate-800\/80 {
+  background-color: var(--om-elevated) !important;
+}
+
+.border-slate-800,
+.border-slate-800\/60,
+.border-slate-800\/70,
+.border-slate-800\/80,
+.border-slate-800\/90,
+.border-slate-700 {
+  border-color: var(--om-border) !important;
+}
+
+/* Sharp TUI / Hyprland corner geometry */
+.rounded-2xl,
+.rounded-3xl {
+  border-radius: 8px !important;
+}
+.rounded-xl {
+  border-radius: 6px !important;
+}
+.rounded-lg {
+  border-radius: 5px !important;
+}
+
+/* ============================================================================
+   SURFACE 1: QUICKSHELL TOP STATUS BAR (om-topbar)
+   ============================================================================ */
+.om-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  background-color: var(--om-surface);
+  border-bottom: 1px solid var(--om-border);
+  padding: 6px 12px;
+  font-family: var(--om-mono);
+  font-size: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.om-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 5px;
+  border: 1px solid var(--om-border);
+  background-color: var(--om-bg);
+  color: var(--om-subtle);
+  font-family: var(--om-mono);
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.14s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.om-pill:hover {
+  border-color: var(--om-focus);
+  color: var(--om-text);
+  background-color: var(--om-elevated);
+}
+
+.om-pill-active,
+.nav-tab.om-pill-active {
+  border-color: var(--om-focus) !important;
+  background-color: var(--om-elevated) !important;
+  color: var(--om-focus) !important;
+  box-shadow: 0 0 0 1px rgba(122, 162, 247, 0.15);
+}
+
+.om-brand-pill {
+  border-color: var(--om-focus);
+  background-color: var(--om-elevated);
+  color: var(--om-text);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.om-key-idx {
+  display: inline-block;
+  padding: 0px 4px;
+  border-radius: 3px;
+  background-color: rgba(255, 255, 255, 0.07);
+  color: var(--om-cyan);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.om-status-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.6);
-}
-
-/* Animations & Transitions */
-.tab-pane-active {
-  display: block !important;
-  animation: fadeIn 0.2s ease-in-out;
+  background-color: var(--om-green);
+  box-shadow: 0 0 8px var(--om-green);
+  animation: omPulse 2s infinite;
 }
 
-@keyframes fadeIn {
+@keyframes omPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ============================================================================
+   SURFACE 2: QUICKSHELL DROPDOWN POPOVER PANEL
+   ============================================================================ */
+.om-dropdown-panel {
+  position: fixed;
+  top: 46px;
+  right: 12px;
+  z-index: 55;
+  width: 310px;
+  background-color: var(--om-surface);
+  border: 1px solid var(--om-focus);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.65);
+  font-family: var(--om-mono);
+  animation: omSlideDown 0.14s ease-out;
+}
+
+@keyframes omSlideDown {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;
@@ -58,31 +208,136 @@ html, body {
   }
 }
 
-/* Custom Card Hover */
-.game-card-hover {
-  transition: all 0.2s ease-in-out;
-}
-.game-card-hover:hover {
-  transform: translateY(-2px);
-  border-color: rgba(99, 102, 241, 0.4);
+/* ============================================================================
+   SURFACE 3: HYPRLAND TILED WINDOWS (om-tile & om-tile-titlebar)
+   ============================================================================ */
+.om-tile {
+  background-color: var(--om-surface);
+  border: 1px solid var(--om-border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* Toast styling */
+.om-tile:hover,
+.om-tile.om-tile-focused {
+  border-color: var(--om-focus);
+}
+
+.om-tile-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background-color: var(--om-bg);
+  border-bottom: 1px solid var(--om-border);
+  font-family: var(--om-mono);
+  font-size: 11px;
+}
+
+.om-win-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--om-subtle);
+  font-weight: 600;
+}
+
+.om-tile:hover .om-win-path,
+.om-tile.om-tile-focused .om-win-path {
+  color: var(--om-focus);
+}
+
+.om-win-idx {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background-color: var(--om-elevated);
+  border: 1px solid var(--om-border);
+  color: var(--om-cyan);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.om-win-tag {
+  color: var(--om-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* ============================================================================
+   SURFACE 4: FOOTER KEYBIND BAR
+   ============================================================================ */
+.om-footer-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  background-color: var(--om-surface);
+  border-top: 1px solid var(--om-border);
+  padding: 5px 14px;
+  font-family: var(--om-mono);
+  font-size: 11px;
+  color: var(--om-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.om-kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background-color: var(--om-elevated);
+  border: 1px solid var(--om-border);
+  color: var(--om-cyan);
+  font-family: var(--om-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Scrollbars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--om-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--om-border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--om-focus);
+}
+
+/* Animations */
+.tab-pane-active {
+  display: block !important;
+  animation: fadeIn 0.16s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .toast {
-  animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: var(--om-mono);
 }
 @keyframes toastIn {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Safe touch targets for mobile buttons */
 button {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;

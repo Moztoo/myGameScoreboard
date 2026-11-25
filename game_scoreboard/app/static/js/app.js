@@ -46,6 +46,338 @@ function closeModal(id) {
   }
 }
 
+// =============================================================================
+// OMARCHY UI — THEME ENGINE, QUICKSHELL TOPBAR, SPOTLIGHT & KEYBOARD NAVIGATION
+// =============================================================================
+const OMARCHY_THEMES = {
+  "tokyo-night": {
+    id: "tokyo-night",
+    label: "Tokyo Night",
+    dot: "#7aa2f7",
+    bg: "#1a1b26",
+    surface: "#16161e",
+    elevated: "#24283b",
+    border: "#292e42",
+    focus: "#7aa2f7",
+    text: "#c0caf5",
+    muted: "#565f89",
+    subtle: "#787c99",
+    accent: "#7aa2f7",
+    cyan: "#7dcfff",
+    green: "#9ece6a",
+    amber: "#e0af68",
+    red: "#f7768e",
+    purple: "#bb9af7",
+  },
+  "catppuccin": {
+    id: "catppuccin",
+    label: "Catppuccin Mocha",
+    dot: "#cba6f7",
+    bg: "#1e1e2e",
+    surface: "#181825",
+    elevated: "#313244",
+    border: "#45475a",
+    focus: "#cba6f7",
+    text: "#cdd6f4",
+    muted: "#6c7086",
+    subtle: "#9399b2",
+    accent: "#89b4fa",
+    cyan: "#89dceb",
+    green: "#a6e3a1",
+    amber: "#f9e2af",
+    red: "#f38ba8",
+    purple: "#cba6f7",
+  },
+  "gruvbox": {
+    id: "gruvbox",
+    label: "Gruvbox Dark",
+    dot: "#fabd2f",
+    bg: "#1d2021",
+    surface: "#282828",
+    elevated: "#3c3836",
+    border: "#504945",
+    focus: "#fabd2f",
+    text: "#ebdbb2",
+    muted: "#928374",
+    subtle: "#a89984",
+    accent: "#83a598",
+    cyan: "#8ec07c",
+    green: "#b8bb26",
+    amber: "#fabd2f",
+    red: "#fb4934",
+    purple: "#d3869b",
+  },
+  "sony-ps5": {
+    id: "sony-ps5",
+    label: "Obsidian Cyan",
+    dot: "#00f0ff",
+    bg: "#090d16",
+    surface: "#0d1322",
+    elevated: "#162038",
+    border: "#1e2f52",
+    focus: "#00b4d8",
+    text: "#f1f5f9",
+    muted: "#64748b",
+    subtle: "#94a3b8",
+    accent: "#0070d1",
+    cyan: "#00f0ff",
+    green: "#10b981",
+    amber: "#f59e0b",
+    red: "#f43f5e",
+    purple: "#818cf8",
+  }
+};
+
+let currentOmarchyTheme = localStorage.getItem('omarchy_theme') || 'tokyo-night';
+
+function applyOmarchyTheme(themeId, notify = false) {
+  const t = OMARCHY_THEMES[themeId] || OMARCHY_THEMES['tokyo-night'];
+  currentOmarchyTheme = t.id;
+  localStorage.setItem('omarchy_theme', t.id);
+
+  const r = document.documentElement.style;
+  r.setProperty('--om-bg', t.bg);
+  r.setProperty('--om-surface', t.surface);
+  r.setProperty('--om-elevated', t.elevated);
+  r.setProperty('--om-border', t.border);
+  r.setProperty('--om-focus', t.focus);
+  r.setProperty('--om-text', t.text);
+  r.setProperty('--om-muted', t.muted);
+  r.setProperty('--om-subtle', t.subtle);
+  r.setProperty('--om-accent', t.accent);
+  r.setProperty('--om-cyan', t.cyan);
+  r.setProperty('--om-green', t.green);
+  r.setProperty('--om-amber', t.amber);
+  r.setProperty('--om-red', t.red);
+  r.setProperty('--om-purple', t.purple);
+
+  const lbl = document.getElementById('om-active-theme-label');
+  if (lbl) lbl.textContent = t.label;
+  const footerLbl = document.getElementById('om-footer-theme-badge');
+  if (footerLbl) footerLbl.textContent = `Theme: ${t.label}`;
+
+  renderOmarchyThemeOptions();
+  if (notify) {
+    showToast(`Tema Omarchy aplicado: ${t.label}`, 'info');
+  }
+}
+
+function cycleOmarchyTheme() {
+  const keys = Object.keys(OMARCHY_THEMES);
+  const idx = keys.indexOf(currentOmarchyTheme);
+  const nextKey = keys[(idx + 1) % keys.length];
+  applyOmarchyTheme(nextKey, true);
+}
+
+function toggleOmarchyThemeDropdown() {
+  const dd = document.getElementById('om-theme-dropdown');
+  if (!dd) return;
+  const isHidden = dd.classList.contains('hidden');
+  renderOmarchyThemeOptions();
+  dd.classList.toggle('hidden', !isHidden);
+}
+
+function renderOmarchyThemeOptions() {
+  const listEl = document.getElementById('om-theme-options-list');
+  if (!listEl) return;
+  listEl.innerHTML = Object.values(OMARCHY_THEMES).map(t => {
+    const active = t.id === currentOmarchyTheme;
+    return `
+      <button type="button" onclick="applyOmarchyTheme('${t.id}', true); document.getElementById('om-theme-dropdown')?.classList.add('hidden');" class="w-full px-2.5 py-2 rounded-lg border text-left text-xs flex items-center justify-between transition ${active ? 'border-indigo-400 bg-slate-800 text-white font-bold' : 'border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800'}">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${t.dot}"></span>
+          <span>${t.label}</span>
+        </div>
+        <span class="text-[10px] ${active ? 'text-emerald-400' : 'text-slate-500'}">${active ? '● ACTIVO' : 'aplicar'}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+async function triggerQuickMatchFromTopbar() {
+  try {
+    // If we already have an active recording session loaded, open match modal directly
+    if (currentRecordingSession && currentRecordingSession.status === 'active') {
+      switchTab('sessions');
+      viewSession(currentRecordingSession.id);
+      await openRecordMatchModal(currentRecordingSession.id);
+      return;
+    }
+
+    // Otherwise check active sessions from API
+    const res = await fetch(getApiUrl('/api/sessions?status=active'));
+    if (res.ok) {
+      const activeSessions = await res.json();
+      if (activeSessions && activeSessions.length > 0) {
+        const latestActive = activeSessions[0];
+        switchTab('sessions');
+        await viewSession(latestActive.id);
+        await openRecordMatchModal(latestActive.id);
+        return;
+      }
+    }
+
+    // No active session found -> open New Session modal
+    switchTab('sessions');
+    await openNewSessionModal();
+    showToast('Inicia una nueva sesión para comenzar a capturar partidas', 'info');
+  } catch (err) {
+    console.error('Error in quick match trigger:', err);
+  }
+}
+
+const OMARCHY_SPOTLIGHT_COMMANDS = [
+  { id: 'quick_match', icon: '🏁', label: 'Registrar Partida / Iniciar Modo Captura (Sesión Activa)', tag: 'KEY: N', action: () => triggerQuickMatchFromTopbar() },
+  { id: 'new_session', icon: '➕', label: 'Crear Nueva Sesión de Juego', tag: 'SESSION', action: () => { switchTab('sessions'); openNewSessionModal(); } },
+  { id: 'tab_dash', icon: '📊', label: 'Ir a Workspace [1]: Dashboard General', tag: 'KEY: 1', action: () => switchTab('dashboard') },
+  { id: 'tab_sessions', icon: '⚔️', label: 'Ir a Workspace [2]: Sesiones y Partidas', tag: 'KEY: 2', action: () => switchTab('sessions') },
+  { id: 'tab_players', icon: '👥', label: 'Ir a Workspace [3]: Jugadores y Perfiles', tag: 'KEY: 3', action: () => switchTab('players') },
+  { id: 'tab_games', icon: '⚙️', label: 'Ir a Workspace [4]: Catálogo de Juegos', tag: 'KEY: 4', action: () => switchTab('games') },
+  { id: 'tab_email', icon: '✉️', label: 'Ir a Workspace [5]: Correo y Automatizaciones', tag: 'KEY: 5', action: () => switchTab('email') },
+  { id: 'tab_backup', icon: '💾', label: 'Ir a Workspace [6]: Respaldo ZIP', tag: 'KEY: 6', action: () => switchTab('backup') },
+  { id: 'theme_tokyo', icon: '🎨', label: 'Tema Omarchy: Tokyo Night', tag: 'THEME', action: () => applyOmarchyTheme('tokyo-night', true) },
+  { id: 'theme_catppuccin', icon: '🎨', label: 'Tema Omarchy: Catppuccin Mocha', tag: 'THEME', action: () => applyOmarchyTheme('catppuccin', true) },
+  { id: 'theme_gruvbox', icon: '🎨', label: 'Tema Omarchy: Gruvbox Dark', tag: 'THEME', action: () => applyOmarchyTheme('gruvbox', true) },
+  { id: 'theme_ps5', icon: '🎨', label: 'Tema Omarchy: Obsidian Cyan', tag: 'THEME', action: () => applyOmarchyTheme('sony-ps5', true) },
+  { id: 'changelog', icon: '📋', label: 'Ver Registro de Cambios (Changelog v1.2.0)', tag: 'DOCS', action: () => openChangelogModal() }
+];
+
+function toggleOmarchySpotlight() {
+  const modal = document.getElementById('modal-omarchy-spotlight');
+  if (!modal) return;
+  const isOpen = modal.style.display === 'flex' && !modal.classList.contains('hidden');
+  if (isOpen) {
+    closeModal('modal-omarchy-spotlight');
+  } else {
+    openModal('modal-omarchy-spotlight');
+    const inp = document.getElementById('om-spotlight-input');
+    if (inp) {
+      inp.value = '';
+      renderOmarchySpotlightList('');
+      setTimeout(() => inp.focus(), 30);
+    }
+  }
+}
+
+function renderOmarchySpotlightList(query = '') {
+  const listEl = document.getElementById('om-spotlight-list');
+  if (!listEl) return;
+  const q = (query || '').trim().toLowerCase();
+  const filtered = OMARCHY_SPOTLIGHT_COMMANDS.filter(c => !q || c.label.toLowerCase().includes(q) || c.tag.toLowerCase().includes(q));
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div class="text-center py-4 text-slate-500">Sin comandos para "${query}"</div>`;
+    return;
+  }
+  listEl.innerHTML = filtered.map(c => `
+    <button type="button" onclick="executeOmarchySpotlightCommand('${c.id}')" class="w-full px-3 py-2 rounded-lg bg-slate-950/90 hover:bg-indigo-600/25 border border-slate-800 hover:border-indigo-500/50 flex items-center justify-between gap-2 text-left transition cursor-pointer">
+      <div class="flex items-center gap-2 min-w-0">
+        <span>${c.icon}</span>
+        <span class="text-slate-200 font-semibold truncate">${c.label}</span>
+      </div>
+      <span class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] text-indigo-300 font-bold flex-shrink-0">${c.tag}</span>
+    </button>
+  `).join('');
+}
+
+function executeOmarchySpotlightCommand(cmdId) {
+  closeModal('modal-omarchy-spotlight');
+  const found = OMARCHY_SPOTLIGHT_COMMANDS.find(c => c.id === cmdId);
+  if (found && found.action) found.action();
+}
+
+function isAnyModalOpen() {
+  const modalIds = [
+    'modal-track-selector',
+    'modal-character-selector',
+    'modal-omarchy-spotlight',
+    'modal-changelog',
+    'modal-match',
+    'modal-session',
+    'modal-edit-player',
+    'modal-automation',
+    'modal-template'
+  ];
+  return modalIds.some(id => {
+    const el = document.getElementById(id);
+    return el && el.style.display !== 'none' && !el.classList.contains('hidden');
+  });
+}
+
+// Initialize Omarchy Theme, Clock & Keyboard Navigation
+applyOmarchyTheme(currentOmarchyTheme, false);
+
+setInterval(() => {
+  const clockEl = document.getElementById('om-live-clock');
+  if (clockEl) {
+    clockEl.textContent = new Date().toLocaleTimeString('es-MX', { hour12: false });
+  }
+}, 1000);
+
+window.addEventListener('keydown', (e) => {
+  const activeEl = document.activeElement;
+  const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT');
+
+  if (e.key === 'Escape') {
+    const dd = document.getElementById('om-theme-dropdown');
+    if (dd && !dd.classList.contains('hidden')) {
+      dd.classList.add('hidden');
+      return;
+    }
+    const priorityModals = [
+      'modal-track-selector',
+      'modal-character-selector',
+      'modal-omarchy-spotlight',
+      'modal-changelog',
+      'modal-match',
+      'modal-session',
+      'modal-edit-player',
+      'modal-automation',
+      'modal-template'
+    ];
+    for (const mId of priorityModals) {
+      const mEl = document.getElementById(mId);
+      if (mEl && mEl.style.display !== 'none' && !mEl.classList.contains('hidden')) {
+        closeModal(mId);
+        return;
+      }
+    }
+    if (isTyping) activeEl.blur();
+    return;
+  }
+
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    toggleOmarchySpotlight();
+    return;
+  }
+
+  if (isTyping) return;
+
+  if (e.key === '/' || e.key === '?') {
+    e.preventDefault();
+    toggleOmarchySpotlight();
+    return;
+  }
+
+  if (e.key.toLowerCase() === 't' && !isAnyModalOpen()) {
+    e.preventDefault();
+    cycleOmarchyTheme();
+    return;
+  }
+
+  if (e.key.toLowerCase() === 'n' && !isAnyModalOpen()) {
+    e.preventDefault();
+    triggerQuickMatchFromTopbar();
+    return;
+  }
+
+  const tabMap = { '1': 'dashboard', '2': 'sessions', '3': 'players', '4': 'games', '5': 'email', '6': 'backup' };
+  if (tabMap[e.key] && !isAnyModalOpen()) {
+    e.preventDefault();
+    switchTab(tabMap[e.key]);
+  }
+});
+
 // Tab Switching
 function switchTab(tabId) {
   currentTab = tabId;
@@ -59,7 +391,7 @@ function switchTab(tabId) {
         section.style.display = 'block';
       }
       if (navBtn) {
-        navBtn.className = 'nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-indigo-300 bg-slate-800 border border-indigo-500/30 shadow';
+        navBtn.classList.add('om-pill-active');
       }
     } else {
       if (section) {
@@ -67,9 +399,14 @@ function switchTab(tabId) {
         section.style.display = 'none';
       }
       if (navBtn) {
-        navBtn.className = 'nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50';
+        navBtn.classList.remove('om-pill-active');
       }
     }
+  });
+
+  document.querySelectorAll('.mobile-nav-tab').forEach(btn => {
+    const t = btn.getAttribute('data-mobile-tab');
+    btn.classList.toggle('om-pill-active', t === tabId);
   });
 
   if (tabId === 'dashboard') loadDashboard();

@@ -2,6 +2,16 @@
 
 Todos los cambios importantes de este Add-on para Home Assistant se documentan en este archivo.
 
+## [1.2.0] - 2026-11-24
+### 🖥️ Rediseño Omarchy UI (Quickshell + Hyprland Tiling WM + TUI)
+- **4 Superficies Core de Omarchy Shell:**
+  - **Quickshell Top Status Bar (`om-topbar`):** Barra superior compacta con lanzador `[🎮 SCOREBOARD // OMARCHY]`, pestañas numeradas `[1:DASH]` a `[6:BACKUP]`, reloj en tiempo real (`HH:MM:SS`), selector de tema `[🎨 TEMA ▾]` y botón directo **`[🏁 +PARTIDA RÁPIDA]`** para abrir el Modo Captura de la sesión activa desde cualquier pantalla.
+  - **Hyprland Tiled Windows (`om-tile`):** Paneles con barras de título TUI/URI (`[01] scoreboard://telemetry/overview-kpis`, `[02] scoreboard://charts/timeline-evolution`, `[04] scoreboard://ranking/global-leaderboard`, `[06] scoreboard://analytics/track-dominance`) y bordes reactivos al foco (`1px solid var(--om-focus)`).
+  - **Motor de Temas Dinámicos Omarchy:** Soporte instantáneo y persistente para **Tokyo Night**, **Catppuccin Mocha**, **Gruvbox Dark** y **Obsidian Cyan** (tecla `t` o menú desplegable).
+  - **Spotlight Command Palette (`⌘K` o `/`) y Barra Inferior de Atajos:** Navegación rápida por teclado (`1-6` pestañas, `n` nueva partida rápida, `t` rotar tema, `/` o `⌘K` paleta de comandos, `Esc` cerrar) manteniendo botones táctiles grandes para elegir personajes, pistas y lugares durante una sesión.
+
+---
+
 ## [1.1.3] - 2026-11-24
 ### 🗺️ Selector Completo de Pistas y Copas
 - **Nuevo menú selector de pistas en ventana emergente:** muestra las **96 pistas + 8 escenarios de batalla de un golpe**, agrupadas con **separadores por copa** (emblema, nombre y miniaturas oficiales).

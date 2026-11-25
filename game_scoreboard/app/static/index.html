@@ -16,7 +16,7 @@
     }
   </script>
   <!-- Local Critical CSS First -->
-  <link rel="stylesheet" href="static/css/styles.css?v=1.1.3">
+  <link rel="stylesheet" href="static/css/styles.css?v=1.2.0">
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Tailwind CSS CDN -->
@@ -48,191 +48,283 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white w-full overflow-x-hidden">
 
-  <!-- Header & Navigation Bar -->
-  <header class="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 shadow-md">
-    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 space-y-2">
-      <!-- Brand Line -->
-      <div class="flex items-center justify-between">
-        <div class="flex items-center space-x-2.5">
-          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-amber-400 flex items-center justify-center shadow-md shadow-indigo-500/20 flex-shrink-0">
-            <span class="text-base sm:text-lg">🎮</span>
-          </div>
-          <div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-sm sm:text-base font-black tracking-tight text-white">Game Scoreboard</span>
-              <button type="button" onclick="openChangelogModal()" title="Ver Registro de Cambios (Changelog)" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1 cursor-pointer">
-                <span>📋</span> <span>v1.1.3</span>
-              </button>
-            </div>
-            <p class="text-[10px] sm:text-xs text-slate-400">Torneos y Partidas entre Amigos</p>
-          </div>
+  <!-- ===================================================================== -->
+  <!-- SURFACE 1: OMARCHY QUICKSHELL TOP STATUS BAR                          -->
+  <!-- ===================================================================== -->
+  <header class="om-topbar">
+    <div class="max-w-7xl mx-auto flex flex-col gap-1.5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <!-- Left: Brand Launcher + Version Changelog + Workspace Pills -->
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          <button type="button" onclick="toggleOmarchySpotlight()" class="om-pill om-brand-pill" title="Abrir Spotlight de Comandos (⌘K o /)">
+            <span>🎮</span>
+            <span>SCOREBOARD // OMARCHY</span>
+          </button>
+          <button type="button" onclick="openChangelogModal()" class="om-pill" title="Ver Registro de Cambios (Changelog)">
+            <span>📋</span>
+            <span class="text-indigo-300 font-bold">v1.2.0</span>
+          </button>
+
+          <nav class="hidden md:flex items-center gap-1 ml-1">
+            <button id="nav-dashboard" onclick="switchTab('dashboard')" class="nav-tab om-pill om-pill-active">
+              <span class="om-key-idx">1</span><span>DASH</span>
+            </button>
+            <button id="nav-sessions" onclick="switchTab('sessions')" class="nav-tab om-pill">
+              <span class="om-key-idx">2</span><span>SESIONES</span>
+            </button>
+            <button id="nav-players" onclick="switchTab('players')" class="nav-tab om-pill">
+              <span class="om-key-idx">3</span><span>JUGADORES</span>
+            </button>
+            <button id="nav-games" onclick="switchTab('games')" class="nav-tab om-pill">
+              <span class="om-key-idx">4</span><span>JUEGOS</span>
+            </button>
+            <button id="nav-email" onclick="switchTab('email')" class="nav-tab om-pill">
+              <span class="om-key-idx">5</span><span>CORREO</span>
+            </button>
+            <button id="nav-backup" onclick="switchTab('backup')" class="nav-tab om-pill">
+              <span class="om-key-idx">6</span><span>BACKUP</span>
+            </button>
+          </nav>
         </div>
 
-        <div id="connection-pill" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          ● En Línea
+        <!-- Center / Right: Live Status + Quick Match Action + Theme + ⌘K -->
+        <div class="flex items-center gap-1.5 ml-auto">
+          <button type="button" onclick="triggerQuickMatchFromTopbar()" class="om-pill !border-emerald-500/50 !bg-emerald-500/15 !text-emerald-300 hover:!bg-emerald-500/25 font-black" title="Acceso rápido: Registrar Partida / Modo Captura en la sesión activa (Tecla n)">
+            <span>🏁</span>
+            <span>+PARTIDA RÁPIDA</span>
+          </button>
+
+          <div id="connection-pill" class="hidden sm:inline-flex om-pill !cursor-default">
+            <span class="om-status-dot"></span>
+            <span id="om-status-text" class="text-emerald-300 font-bold">ONLINE</span>
+            <span class="text-slate-500">|</span>
+            <span id="om-live-clock" class="text-slate-300">00:00:00</span>
+          </div>
+
+          <button type="button" id="om-theme-btn" onclick="toggleOmarchyThemeDropdown()" class="om-pill" title="Cambiar tema visual Omarchy (Tecla t)">
+            <span>🎨</span>
+            <span id="om-active-theme-label" class="hidden sm:inline">Tokyo Night</span>
+            <span>▾</span>
+          </button>
+
+          <button type="button" onclick="toggleOmarchySpotlight()" class="om-pill !text-indigo-300" title="Paleta de Comandos Spotlight (⌘K o /)">
+            <span>⌘K</span>
+          </button>
         </div>
       </div>
 
-      <!-- Navigation Tabs (Mobile-friendly horizontal swipe) -->
-      <nav class="flex items-center space-x-1 sm:space-x-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
-        <button id="nav-dashboard" onclick="switchTab('dashboard')" class="nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-indigo-300 bg-slate-800 border border-indigo-500/30 shadow">
-          <span>📊</span> Dashboard
+      <!-- Mobile Horizontal Workspace Bar (< md) -->
+      <nav class="flex md:hidden items-center gap-1 overflow-x-auto no-scrollbar pb-0.5">
+        <button onclick="switchTab('dashboard')" data-mobile-tab="dashboard" class="mobile-nav-tab om-pill om-pill-active">
+          <span class="om-key-idx">1</span><span>DASH</span>
         </button>
-        <button id="nav-sessions" onclick="switchTab('sessions')" class="nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
-          <span>⚔️</span> Sesiones
+        <button onclick="switchTab('sessions')" data-mobile-tab="sessions" class="mobile-nav-tab om-pill">
+          <span class="om-key-idx">2</span><span>SESIONES</span>
         </button>
-        <button id="nav-players" onclick="switchTab('players')" class="nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
-          <span>👥</span> Jugadores
+        <button onclick="switchTab('players')" data-mobile-tab="players" class="mobile-nav-tab om-pill">
+          <span class="om-key-idx">3</span><span>JUGADORES</span>
         </button>
-        <button id="nav-games" onclick="switchTab('games')" class="nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
-          <span>⚙️</span> Juegos
+        <button onclick="switchTab('games')" data-mobile-tab="games" class="mobile-nav-tab om-pill">
+          <span class="om-key-idx">4</span><span>JUEGOS</span>
         </button>
-        <button id="nav-email" onclick="switchTab('email')" class="nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
-          <span>✉️</span> Correo
+        <button onclick="switchTab('email')" data-mobile-tab="email" class="mobile-nav-tab om-pill">
+          <span class="om-key-idx">5</span><span>CORREO</span>
         </button>
-        <button id="nav-backup" onclick="switchTab('backup')" class="nav-tab flex-shrink-0 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50">
-          <span>💾</span> Respaldo
+        <button onclick="switchTab('backup')" data-mobile-tab="backup" class="mobile-nav-tab om-pill">
+          <span class="om-key-idx">6</span><span>BACKUP</span>
         </button>
       </nav>
     </div>
   </header>
 
+  <!-- ===================================================================== -->
+  <!-- SURFACE 2: QUICKSHELL THEME & QUICK-ACTIONS DROPDOWN PANEL            -->
+  <!-- ===================================================================== -->
+  <div id="om-theme-dropdown" class="om-dropdown-panel hidden space-y-3">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-indigo-400">🎨 OMARCHY // THEME ENGINE</span>
+      <span class="text-[10px] text-slate-400">[t] rotar</span>
+    </div>
+    <div id="om-theme-options-list" class="grid grid-cols-1 gap-1.5">
+    </div>
+    <div class="border-t border-slate-800 pt-2 flex items-center justify-between text-[10px] text-slate-400">
+      <span>Atajo Captura: <strong class="text-emerald-400">[n]</strong></span>
+      <span>Spotlight: <strong class="text-indigo-400">[⌘K /]</strong></span>
+    </div>
+  </div>
+
   <!-- Notification Toast Container -->
-  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
+  <div id="toast-container" class="fixed bottom-10 right-4 z-50 flex flex-col space-y-2 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
 
   <!-- Main Content Area -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 overflow-x-hidden">
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-5 lg:px-6 py-3 sm:py-4 overflow-x-hidden">
 
     <!-- ===================================================================== -->
-    <!-- TAB: DASHBOARD                                                        -->
+    <!-- TAB: DASHBOARD (HYPRLAND TILED WINDOWS WORKSPACE)                     -->
     <!-- ===================================================================== -->
-    <section id="tab-dashboard" class="space-y-4 sm:space-y-6">
-      <!-- Filter and Header Bar -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/80 p-3 sm:p-4 rounded-2xl border border-slate-800">
-        <div class="flex items-center space-x-2 w-full sm:w-auto">
-          <label for="dash-game-filter" class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex-shrink-0">Juego:</label>
-          <select id="dash-game-filter" onchange="loadDashboard()" class="w-full sm:w-64 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-            <option value="">Todos los Videojuegos</option>
-          </select>
+    <section id="tab-dashboard" class="space-y-3.5">
+      <!-- TILE 01: Telemetry Filter & Overview KPIs -->
+      <div class="om-tile" data-om-tile="1">
+        <div class="om-tile-titlebar">
+          <div class="om-win-path">
+            <span class="om-win-idx">01</span>
+            <span>scoreboard://telemetry/overview-kpis</span>
+          </div>
+          <span class="om-win-tag">SQLITE:WAL • LIVE</span>
         </div>
+        <div class="p-3 sm:p-4 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div class="flex items-center space-x-2 w-full sm:w-auto">
+              <label for="dash-game-filter" class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex-shrink-0 om-mono">JUEGO:</label>
+              <select id="dash-game-filter" onchange="loadDashboard()" class="w-full sm:w-64 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:ring-1 focus:ring-indigo-500 focus:outline-none om-mono">
+                <option value="">Todos los Videojuegos</option>
+              </select>
+            </div>
 
-        <div class="flex items-center space-x-3 pt-1 sm:pt-0">
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="dash-practice-toggle" onchange="loadDashboard()" class="sr-only peer">
-            <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
-            <span class="ml-2.5 text-xs font-medium text-slate-300">Incluir partidas de práctica</span>
-          </label>
-        </div>
-      </div>
+            <div class="flex items-center justify-between sm:justify-end gap-3">
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="dash-practice-toggle" onchange="loadDashboard()" class="sr-only peer">
+                <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                <span class="ml-2 text-xs font-medium text-slate-300 om-mono">Incluir práctica</span>
+              </label>
+              <button type="button" onclick="triggerQuickMatchFromTopbar()" class="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/40 text-indigo-200 text-xs font-bold om-mono transition">
+                🏁 Capturar Partida
+              </button>
+            </div>
+          </div>
 
-      <!-- Overview KPI Cards -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4" id="dash-kpis">
-        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3 sm:p-4 shadow-sm">
-          <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Total Partidas</div>
-          <div class="text-xl sm:text-2xl font-black text-white mt-1" id="kpi-matches">0</div>
-          <div class="text-[10px] text-slate-500 mt-0.5 truncate" id="kpi-practice-sub">0 comp. · 0 práct.</div>
-        </div>
-        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3 sm:p-4 shadow-sm">
-          <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Jugadores</div>
-          <div class="text-xl sm:text-2xl font-black text-indigo-400 mt-1" id="kpi-players">0</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">En la comunidad</div>
-        </div>
-        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3 sm:p-4 shadow-sm">
-          <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Sesiones</div>
-          <div class="text-xl sm:text-2xl font-black text-emerald-400 mt-1" id="kpi-sessions">0</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">En curso ahora</div>
-        </div>
-        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3 sm:p-4 shadow-sm">
-          <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Top Juego</div>
-          <div class="text-sm sm:text-base font-bold text-amber-400 mt-1 truncate" id="kpi-top-game">-</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">Más jugado</div>
+          <!-- Overview KPI Cards -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5" id="dash-kpis">
+            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+              <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider om-mono">TOTAL PARTIDAS</div>
+              <div class="text-xl sm:text-2xl font-black text-white mt-0.5" id="kpi-matches">0</div>
+              <div class="text-[10px] text-slate-400 mt-0.5 truncate om-mono" id="kpi-practice-sub">0 comp. · 0 práct.</div>
+            </div>
+            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+              <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider om-mono">JUGADORES</div>
+              <div class="text-xl sm:text-2xl font-black text-indigo-400 mt-0.5" id="kpi-players">0</div>
+              <div class="text-[10px] text-slate-400 mt-0.5 om-mono">Registrados</div>
+            </div>
+            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+              <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider om-mono">SESIONES ACTIVAS</div>
+              <div class="text-xl sm:text-2xl font-black text-emerald-400 mt-0.5" id="kpi-sessions">0</div>
+              <div class="text-[10px] text-slate-400 mt-0.5 om-mono">En curso ahora</div>
+            </div>
+            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
+              <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider om-mono">TOP JUEGO</div>
+              <div class="text-sm sm:text-base font-bold text-amber-400 mt-1 truncate om-mono" id="kpi-top-game">-</div>
+              <div class="text-[10px] text-slate-400 mt-0.5 om-mono">Más jugado</div>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- Podium Top 3 -->
-      <div id="dash-podium-container" class="hidden">
-        <h3 class="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
-          <span>🏆</span> Podio de Campeones
-        </h3>
-        <div class="grid grid-cols-3 gap-2 sm:gap-4 items-end max-w-lg mx-auto pt-4 pb-2" id="dash-podium">
+      <div id="dash-podium-container" class="hidden om-tile">
+        <div class="om-tile-titlebar">
+          <div class="om-win-path">
+            <span class="om-win-idx">🏆</span>
+            <span>scoreboard://champions/podium-top3</span>
+          </div>
+          <span class="om-win-tag">RANKING • TOP 3</span>
+        </div>
+        <div class="p-3 sm:p-4">
+          <div class="grid grid-cols-3 gap-2 sm:gap-4 items-end max-w-lg mx-auto pt-2 pb-1" id="dash-podium">
+          </div>
         </div>
       </div>
 
-      <!-- Evolution Chart vs Time -->
-      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-5 shadow-lg space-y-3">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
-          <div class="flex items-center gap-2.5">
-            <span class="text-xl">📈</span>
-            <div>
-              <h2 class="text-sm sm:text-base font-bold text-white">Evolución de Puntuaciones en el Tiempo</h2>
-              <p class="text-[11px] text-slate-400">Progresión y tendencias entre partidas y sesiones de juego.</p>
+      <!-- TILE 02: Evolution Chart vs Time -->
+      <div class="om-tile" data-om-tile="2">
+        <div class="om-tile-titlebar">
+          <div class="om-win-path">
+            <span class="om-win-idx">02</span>
+            <span>scoreboard://charts/timeline-evolution</span>
+          </div>
+          <span class="om-win-tag">SERIES • CHART.JS</span>
+        </div>
+        <div class="p-3.5 sm:p-4 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+            <div class="flex items-center gap-2">
+              <span>📈</span>
+              <div>
+                <h2 class="text-xs sm:text-sm font-bold text-white om-mono">EVOLUCIÓN DE PUNTUACIONES VS TIEMPO</h2>
+                <p class="text-[11px] text-slate-400">Progresión acumulada y por partida entre sesiones</p>
+              </div>
+            </div>
+            <div class="inline-flex rounded-lg bg-slate-950 p-0.5 border border-slate-800 text-xs om-mono">
+              <button type="button" id="chart-mode-cumulative" onclick="switchChartMode('cumulative')" class="px-2.5 py-1 rounded-md font-semibold text-indigo-400 bg-slate-800 transition">Acumulado</button>
+              <button type="button" id="chart-mode-match" onclick="switchChartMode('match')" class="px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition">Por Partida</button>
             </div>
           </div>
-          <div class="flex items-center gap-2">
-            <div class="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800 text-xs">
-              <button type="button" id="chart-mode-cumulative" onclick="switchChartMode('cumulative')" class="px-2.5 py-1 rounded-lg font-semibold text-indigo-400 bg-slate-800 transition">Acumulado</button>
-              <button type="button" id="chart-mode-match" onclick="switchChartMode('match')" class="px-2.5 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition">Por Partida</button>
+
+          <div class="relative w-full h-60 sm:h-72" id="dash-chart-container">
+            <canvas id="dash-evolution-chart"></canvas>
+            <div id="dash-chart-empty" class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-slate-950/60 rounded-xl">
+              <span class="text-3xl mb-1.5">🏁</span>
+              <p class="text-xs text-slate-300 font-medium">Aún no hay suficientes partidas registradas para graficar la evolución.</p>
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="relative w-full h-64 sm:h-80" id="dash-chart-container">
-          <canvas id="dash-evolution-chart"></canvas>
-          <div id="dash-chart-empty" class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-slate-950/60 rounded-xl">
-            <span class="text-3xl mb-1.5">🏁</span>
-            <p class="text-xs text-slate-300 font-medium">Aún no hay suficientes partidas registradas para graficar la evolución.</p>
-            <p class="text-[10px] text-slate-500 mt-1">Registra partidas oficiales para ver la curva de rendimiento.</p>
+      <!-- TILE 03: Advanced Stats: Records & Meta Highlights -->
+      <div class="om-tile" data-om-tile="3">
+        <div class="om-tile-titlebar">
+          <div class="om-win-path">
+            <span class="om-win-idx">03</span>
+            <span>scoreboard://analytics/records-and-meta</span>
+          </div>
+          <span class="om-win-tag">HIGHLIGHTS • META</span>
+        </div>
+        <div id="dash-advanced-stats" class="p-3 sm:p-4 grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-3">
+          <!-- Record Match -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-start gap-3">
+            <div class="p-2 rounded-lg bg-amber-500/10 text-amber-400 text-xl flex-shrink-0">⚡</div>
+            <div class="space-y-0.5 min-w-0 flex-1">
+              <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider om-mono">RÉCORD EN PARTIDA</div>
+              <div class="text-sm sm:text-base font-black text-white truncate" id="stat-record-player">-</div>
+              <div class="text-xs font-bold text-amber-400 om-mono" id="stat-record-score">0 pts</div>
+              <div class="text-[10px] text-slate-500 truncate" id="stat-record-detail">Partida competitiva</div>
+            </div>
+          </div>
+
+          <!-- Top Character / Meta -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-start gap-3">
+            <div id="stat-top-char-icon-box" class="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 text-xl flex-shrink-0 flex items-center justify-center w-11 h-11">🏎️</div>
+            <div class="space-y-0.5 min-w-0 flex-1">
+              <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider om-mono">PERSONAJE MÁS GANADOR</div>
+              <div class="text-sm sm:text-base font-black text-white truncate" id="stat-top-char">-</div>
+              <div class="text-xs font-bold text-indigo-400 om-mono" id="stat-top-char-wins">0 victorias</div>
+              <div class="text-[10px] text-slate-500 truncate om-mono" id="stat-top-char-winrate">Efectividad: 0%</div>
+            </div>
+          </div>
+
+          <!-- Best Win Rate Player -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-start gap-3">
+            <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-xl flex-shrink-0">🔥</div>
+            <div class="space-y-0.5 min-w-0 flex-1">
+              <div class="text-[10px] text-slate-400 uppercase font-bold tracking-wider om-mono">MEJOR WIN RATE</div>
+              <div class="text-sm sm:text-base font-black text-white truncate" id="stat-best-winrate-player">-</div>
+              <div class="text-xs font-bold text-emerald-400 om-mono" id="stat-best-winrate-pct">0%</div>
+              <div class="text-[10px] text-slate-500 truncate" id="stat-best-winrate-detail">Porcentaje de 1º lugares</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Advanced Stats: Records & Meta Highlights -->
-      <div id="dash-advanced-stats" class="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-4">
-        <!-- Record Match -->
-        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-start gap-3">
-          <div class="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 text-xl flex-shrink-0">⚡</div>
-          <div class="space-y-1 min-w-0 flex-1">
-            <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Récord en una Partida</div>
-            <div class="text-base sm:text-lg font-black text-white truncate" id="stat-record-player">-</div>
-            <div class="text-xs font-bold text-amber-400" id="stat-record-score">0 pts</div>
-            <div class="text-[10px] text-slate-500 truncate" id="stat-record-detail">Partida competitiva</div>
+      <!-- TILE 04: Leaderboard Table -->
+      <div class="om-tile" data-om-tile="4">
+        <div class="om-tile-titlebar">
+          <div class="om-win-path">
+            <span class="om-win-idx">04</span>
+            <span>scoreboard://ranking/global-leaderboard</span>
           </div>
-        </div>
-
-        <!-- Top Character / Meta -->
-        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-start gap-3">
-          <div id="stat-top-char-icon-box" class="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 text-xl flex-shrink-0 flex items-center justify-center w-11 h-11">🏎️</div>
-          <div class="space-y-1 min-w-0 flex-1">
-            <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Personaje Más Ganador</div>
-            <div class="text-base sm:text-lg font-black text-white truncate" id="stat-top-char">-</div>
-            <div class="text-xs font-bold text-indigo-400" id="stat-top-char-wins">0 victorias</div>
-            <div class="text-[10px] text-slate-500 truncate" id="stat-top-char-winrate">Efectividad: 0%</div>
-          </div>
-        </div>
-
-        <!-- Best Win Rate Player -->
-        <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-start gap-3">
-          <div class="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-xl flex-shrink-0">🔥</div>
-          <div class="space-y-1 min-w-0 flex-1">
-            <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Mejor Efectividad (Win Rate)</div>
-            <div class="text-base sm:text-lg font-black text-white truncate" id="stat-best-winrate-player">-</div>
-            <div class="text-xs font-bold text-emerald-400" id="stat-best-winrate-pct">0%</div>
-            <div class="text-[10px] text-slate-500 truncate" id="stat-best-winrate-detail">Porcentaje de primeros lugares</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Leaderboard Table -->
-      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 overflow-hidden shadow-lg">
-        <div class="px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-          <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-1.5">
-            <span>🎖️</span> Tabla General de Posiciones (Leaderboard)
-          </h2>
-          <span class="text-[11px] text-slate-400" id="dash-practice-indicator">Modo Competitivo (Excluye Práctica)</span>
+          <span class="om-win-tag" id="dash-practice-indicator">COMPETITIVE • TABLE</span>
         </div>
         <div class="overflow-x-auto w-full">
           <table class="w-full text-left text-xs sm:text-sm text-slate-300 min-w-[580px]">
-            <thead class="bg-slate-950/70 text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
+            <thead class="bg-slate-950/80 text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800 om-mono">
               <tr>
                 <th class="py-2.5 px-3 w-10 text-center">#</th>
                 <th class="py-2.5 px-3">Jugador</th>
@@ -252,61 +344,72 @@
         </div>
       </div>
 
-      <!-- Track & Class Performance Analytics -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <!-- Performance by Class (150cc, 200cc, Espejo) -->
-        <div class="lg:col-span-5 bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-5 shadow-lg space-y-3">
-          <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-            <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-1.5">
-              <span>⚙️</span> Desempeño por Clase / Modo
-            </h2>
-            <span class="text-[11px] text-slate-400">150cc · 200cc · Espejo</span>
+      <!-- TILE 05 & 06: Track & Class Performance Analytics -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+        <!-- TILE 05: Performance by Class (150cc, 200cc, Espejo) -->
+        <div class="lg:col-span-5 om-tile">
+          <div class="om-tile-titlebar">
+            <div class="om-win-path">
+              <span class="om-win-idx">05</span>
+              <span>scoreboard://analytics/class-modes</span>
+            </div>
+            <span class="om-win-tag">150CC • 200CC • ESPEJO</span>
           </div>
-          <div id="dash-class-stats-list" class="space-y-2.5">
+          <div class="p-3.5 sm:p-4 space-y-2.5" id="dash-class-stats-list">
             <div class="text-center py-6 text-slate-500 text-xs">Cargando estadísticas por clase...</div>
           </div>
         </div>
 
-        <!-- Performance by Track / Cup -->
-        <div class="lg:col-span-7 bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-5 shadow-lg space-y-3">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
-            <div>
-              <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-1.5">
-                <span>🗺️</span> Dominio por Pista y Copa
-              </h2>
-              <p class="text-[11px] text-slate-400">Estadísticas acumuladas de las carreras capturadas pista por pista</p>
+        <!-- TILE 06: Performance by Track / Cup -->
+        <div class="lg:col-span-7 om-tile">
+          <div class="om-tile-titlebar">
+            <div class="om-win-path">
+              <span class="om-win-idx">06</span>
+              <span>scoreboard://analytics/track-dominance</span>
             </div>
-            <select id="dash-track-player-filter" onchange="renderTrackAnalyticsTable()" class="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
-              <option value="">Todos los Jugadores (Rey de la Pista)</option>
-            </select>
+            <span class="om-win-tag">96 TRACKS • 24 CUPS</span>
           </div>
-          <div class="overflow-x-auto max-h-80 overflow-y-auto">
-            <table class="w-full text-left text-xs text-slate-300">
-              <thead class="bg-slate-950/80 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0">
-                <tr>
-                  <th class="py-2 px-3">Pista / Copa</th>
-                  <th class="py-2 px-2 text-center">Veces</th>
-                  <th class="py-2 px-3" id="dash-track-col-leader">Dominador / Jugador</th>
-                  <th class="py-2 px-2 text-center">1º Lugares</th>
-                  <th class="py-2 px-2 text-center">Pos. Prom</th>
-                  <th class="py-2 px-3 text-right">Pts Prom</th>
-                </tr>
-              </thead>
-              <tbody id="dash-track-stats-body" class="divide-y divide-slate-800/60">
-                <tr><td colspan="6" class="text-center py-6 text-slate-500">Registra carreras en Modo Captura para ver estadísticas por pista.</td></tr>
-              </tbody>
-            </table>
+          <div class="p-3.5 sm:p-4 space-y-2.5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
+              <span class="text-xs font-bold text-white om-mono">🗺️ DOMINIO POR PISTA Y COPA</span>
+              <select id="dash-track-player-filter" onchange="renderTrackAnalyticsTable()" class="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:ring-1 focus:ring-indigo-500 focus:outline-none om-mono">
+                <option value="">Todos los Jugadores (Rey de la Pista)</option>
+              </select>
+            </div>
+            <div class="overflow-x-auto max-h-80 overflow-y-auto">
+              <table class="w-full text-left text-xs text-slate-300">
+                <thead class="bg-slate-950/80 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0 om-mono">
+                  <tr>
+                    <th class="py-2 px-3">Pista / Copa</th>
+                    <th class="py-2 px-2 text-center">Veces</th>
+                    <th class="py-2 px-3" id="dash-track-col-leader">Dominador / Jugador</th>
+                    <th class="py-2 px-2 text-center">1º Lugares</th>
+                    <th class="py-2 px-2 text-center">Pos. Prom</th>
+                    <th class="py-2 px-3 text-right">Pts Prom</th>
+                  </tr>
+                </thead>
+                <tbody id="dash-track-stats-body" class="divide-y divide-slate-800/60">
+                  <tr><td colspan="6" class="text-center py-6 text-slate-500">Registra carreras en Modo Captura para ver estadísticas por pista.</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Recent Matches Timeline -->
-      <div class="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 sm:p-5">
-        <h2 class="text-sm sm:text-base font-bold text-white mb-3 flex items-center gap-1.5">
-          <span>⏱️</span> Partidas Recientes
-        </h2>
-        <div id="recent-matches-list" class="space-y-2.5">
-          <div class="text-center py-6 text-slate-500 text-xs">Cargando partidas...</div>
+      <!-- TILE 07: Recent Matches Timeline -->
+      <div class="om-tile">
+        <div class="om-tile-titlebar">
+          <div class="om-win-path">
+            <span class="om-win-idx">07</span>
+            <span>scoreboard://history/recent-matches</span>
+          </div>
+          <span class="om-win-tag">LOG • LATEST 8</span>
+        </div>
+        <div class="p-3.5 sm:p-4">
+          <div id="recent-matches-list" class="space-y-2.5">
+            <div class="text-center py-6 text-slate-500 text-xs">Cargando partidas...</div>
+          </div>
         </div>
       </div>
     </section>
@@ -1240,7 +1343,45 @@
     </div>
   </div>
 
+  <!-- ===================================================================== -->
+  <!-- SURFACE 4: OMARCHY SPOTLIGHT COMMAND PALETTE (⌘K / /)                 -->
+  <!-- ===================================================================== -->
+  <div id="modal-omarchy-spotlight" style="display: none;" class="fixed inset-0 z-[70] flex items-start justify-center pt-14 sm:pt-24 p-3 bg-slate-950/85 backdrop-blur-md">
+    <div class="om-tile w-full max-w-xl shadow-2xl !border-indigo-500/70">
+      <div class="om-tile-titlebar">
+        <div class="om-win-path">
+          <span class="om-win-idx">⌘K</span>
+          <span>omarchy://spotlight/command-launcher</span>
+        </div>
+        <span class="om-win-tag">[ESC] CERRAR</span>
+      </div>
+      <div class="p-3 space-y-2.5">
+        <input type="text" id="om-spotlight-input" oninput="renderOmarchySpotlightList(this.value)" placeholder="Escribe un comando (ej. partida, sesion, tokyo, catppuccin, gruvbox, pista)..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs sm:text-sm text-white om-mono focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+        <div id="om-spotlight-list" class="max-h-72 overflow-y-auto space-y-1 om-mono text-xs">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- OMARCHY FOOTER KEYBIND BAR                                            -->
+  <!-- ===================================================================== -->
+  <footer class="om-footer-bar">
+    <div class="flex items-center gap-2 truncate">
+      <span class="font-bold text-indigo-400">OMARCHY SHELL // SCOREBOARD v1.2.0</span>
+      <span class="hidden sm:inline text-slate-500">•</span>
+      <span id="om-footer-theme-badge" class="hidden sm:inline text-slate-400">Theme: Tokyo Night</span>
+    </div>
+    <div class="flex items-center gap-2.5 overflow-x-auto no-scrollbar">
+      <span><kbd class="om-kbd">1-6</kbd> Pestañas</span>
+      <span><kbd class="om-kbd">n</kbd> +Partida</span>
+      <span><kbd class="om-kbd">t</kbd> Tema</span>
+      <span><kbd class="om-kbd">/</kbd> o <kbd class="om-kbd">⌘K</kbd> Comandos</span>
+      <span class="hidden sm:inline"><kbd class="om-kbd">Esc</kbd> Cerrar</span>
+    </div>
+  </footer>
+
   <!-- JavaScript Code: loaded with relative path supported by <base> -->
-  <script src="static/js/app.js?v=1.1.3"></script>
+  <script src="static/js/app.js?v=1.2.0"></script>
 </body>
 </html>
