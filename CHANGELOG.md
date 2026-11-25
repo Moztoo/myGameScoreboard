@@ -2,6 +2,18 @@
 
 Todos los cambios importantes de este Add-on para Home Assistant se documentan en este archivo.
 
+## [1.1.3] - 2026-11-24
+### 🗺️ Selector Completo de Pistas y Copas
+- **Nuevo menú selector de pistas en ventana emergente:** muestra las **96 pistas + 8 escenarios de batalla de un golpe**, agrupadas con **separadores por copa** (emblema, nombre y miniaturas oficiales).
+  - Barra de acceso rápido con los emblemas de las 24 copas para saltar directo a cualquier copa.
+  - Buscador para filtrar pistas o copas.
+  - Toca una pista para elegirla, o usa **"Cargar las 4 pistas de esta Copa"** para llenar automáticamente la carrera actual y las 3 siguientes.
+  - El Modo Captura queda compacto: solo muestra la pista actual y el botón **🗺️ Elegir Pista**.
+- **Selección de Copa en la configuración de la partida** ahora abre el mismo catálogo visual en lugar de un dropdown.
+- **Selector de personaje compacto:** cada jugador muestra un botón con su personaje actual; al tocarlo se abre una ventana con los 48 iconos para elegir rápido sin agrandar la pantalla.
+
+---
+
 ## [1.1.2] - 2026-11-24
 ### 🎨 Mejoras de UX / Selección Rápida
 - **Selector Directo de Personajes con Iconos (Sin Dropdown):**

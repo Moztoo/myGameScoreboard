@@ -16,7 +16,7 @@
     }
   </script>
   <!-- Local Critical CSS First -->
-  <link rel="stylesheet" href="static/css/styles.css?v=1.1.2">
+  <link rel="stylesheet" href="static/css/styles.css?v=1.1.3">
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Tailwind CSS CDN -->
@@ -61,7 +61,7 @@
             <div class="flex items-center gap-1.5">
               <span class="text-sm sm:text-base font-black tracking-tight text-white">Game Scoreboard</span>
               <button type="button" onclick="openChangelogModal()" title="Ver Registro de Cambios (Changelog)" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1 cursor-pointer">
-                <span>📋</span> <span>v1.1.2</span>
+                <span>📋</span> <span>v1.1.3</span>
               </button>
             </div>
             <p class="text-[10px] sm:text-xs text-slate-400">Torneos y Partidas entre Amigos</p>
@@ -844,39 +844,26 @@
           </div>
         </div>
 
-        <!-- Track Selection Section -->
-        <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
+        <!-- Track Selection Section (Compact Trigger -> Opens Full Track Selector Modal) -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
+          <div class="flex flex-wrap items-center justify-between gap-2.5">
+            <div class="flex items-center gap-2.5 cursor-pointer group" onclick="openTrackSelectorModal('race')" title="Haz clic para abrir el selector completo de pistas">
               <span class="text-base">🗺️</span>
               <div>
                 <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-400">Pista de esta Carrera</div>
-                <div class="text-sm sm:text-base font-black text-white" id="capture-current-track-display">Selecciona una pista</div>
+                <div class="text-sm sm:text-base font-black text-white group-hover:text-indigo-300 transition" id="capture-current-track-display">Selecciona una pista</div>
               </div>
             </div>
             <div class="flex items-center gap-1.5">
               <span id="capture-track-auto-badge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                 ✨ Asignada por Copa
               </span>
-              <button type="button" id="btn-toggle-track-picker" onclick="toggleCaptureTrackPicker()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-indigo-300 font-semibold border border-slate-700">
-                Cambiar Pista
+              <button type="button" id="btn-toggle-track-picker" onclick="openTrackSelectorModal('race')" class="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/35 text-xs text-indigo-200 font-bold border border-indigo-500/40 flex items-center gap-1.5 transition">
+                <span>🗺️</span> <span>Elegir Pista (Ver Todas)</span>
               </button>
-              <button type="button" onclick="pickRandomMarioKartTrack()" class="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-xs text-amber-300 font-semibold border border-amber-500/30" title="Elegir pista al azar">
+              <button type="button" onclick="pickRandomMarioKartTrack()" class="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-xs text-amber-300 font-semibold border border-amber-500/30 transition" title="Elegir pista al azar">
                 🎲 Al Azar
               </button>
-            </div>
-          </div>
-
-          <!-- Interactive Cup & Track Picker -->
-          <div id="capture-track-picker-panel" class="space-y-2.5 pt-2 border-t border-slate-800/80">
-            <div class="flex items-center gap-2">
-              <input type="text" id="capture-track-search" oninput="filterCaptureTracks(this.value)" placeholder="🔍 Buscar pista por nombre (ej. Arco Iris, Delfín, Waluigi, Bebé)..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none">
-            </div>
-            <!-- Cup Pills -->
-            <div id="capture-cups-grid" class="flex items-center gap-1.5 overflow-x-auto pb-1.5">
-            </div>
-            <!-- Tracks of Selected Cup or Search Results -->
-            <div id="capture-tracks-buttons" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             </div>
           </div>
         </div>
@@ -1201,7 +1188,59 @@
     </div>
   </div>
 
+  <!-- ===================================================================== -->
+  <!-- MODAL SELECTOR DE PISTAS Y COPAS (96 PISTAS DE UN GOLPE CON SEPARADORES) -->
+  <!-- ===================================================================== -->
+  <div id="modal-track-selector" style="display: none;" class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-slate-950/90 backdrop-blur-md">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-5xl p-4 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] space-y-3.5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">🗺️</span>
+          <div>
+            <h3 class="text-base sm:text-lg font-black text-white" id="track-selector-modal-title">Catálogo Completo de Pistas y Copas</h3>
+            <p class="text-xs text-slate-400" id="track-selector-modal-subtitle">Toca cualquier pista para seleccionarla al instante, o carga las 4 pistas de una copa.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="text" id="track-selector-search-input" oninput="renderFullTrackSelectorBody(this.value)" placeholder="🔍 Filtrar pista o copa..." class="w-48 sm:w-64 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <button type="button" onclick="pickRandomFromTrackSelectorModal()" class="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-bold whitespace-nowrap transition">
+            🎲 Al Azar
+          </button>
+          <button type="button" onclick="closeModal('modal-track-selector')" class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 text-sm">✕</button>
+        </div>
+      </div>
+
+      <!-- Quick Jump Cup Emblems Strip -->
+      <div id="track-selector-cup-jump-strip" class="flex items-center gap-1.5 overflow-x-auto pb-1">
+      </div>
+
+      <!-- Full All-Tracks-At-Once Body Grouped by Cup Separators -->
+      <div id="track-selector-all-cups-body" class="overflow-y-auto space-y-4 pr-1 flex-1">
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL SELECTOR RÁPIDO DE PERSONAJE (48 ICONOS DE UN GOLPE)            -->
+  <!-- ===================================================================== -->
+  <div id="modal-character-selector" style="display: none;" class="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-slate-950/90 backdrop-blur-md">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-3xl p-4 sm:p-6 shadow-2xl flex flex-col max-h-[90vh] space-y-3.5">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">🎭</span>
+          <div>
+            <h3 class="text-base sm:text-lg font-black text-white" id="char-selector-modal-title">Seleccionar Personaje</h3>
+            <p class="text-xs text-slate-400" id="char-selector-modal-subtitle">Toca un icono para asignarlo al jugador.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-character-selector')" class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 text-sm">✕</button>
+      </div>
+      <div id="char-selector-modal-grid" class="overflow-y-auto grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 p-1">
+      </div>
+    </div>
+  </div>
+
   <!-- JavaScript Code: loaded with relative path supported by <base> -->
-  <script src="static/js/app.js?v=1.1.2"></script>
+  <script src="static/js/app.js?v=1.1.3"></script>
 </body>
 </html>

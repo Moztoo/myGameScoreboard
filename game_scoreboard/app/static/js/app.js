@@ -1503,38 +1503,22 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
     }
 
     let metricInput = `<input type="text" name="metric_${p.id}" value="${metricVal}" placeholder="ej. Mario / Yoshi" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">`;
-    let activeCharBadgeHtml = '';
 
     if (currentGameMetricsDef && currentGameMetricsDef.type === 'select' && currentGameMetricsDef.options) {
       const defaultFallbackChar = currentGameMetricsDef.options[idx % currentGameMetricsDef.options.length] || currentGameMetricsDef.options[0];
       const activeCharVal = metricVal || defaultFallbackChar;
       const charIconUrl = getCharacterIconUrl(activeCharVal);
 
-      activeCharBadgeHtml = `
-        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 mt-1 w-fit">
-          <img id="char-preview-img-${p.id}" src="${charIconUrl || ''}" alt="${activeCharVal}" class="w-6 h-6 object-contain flex-shrink-0 ${charIconUrl ? '' : 'hidden'}">
-          <span id="char-preview-label-${p.id}" class="text-[11px] font-black text-indigo-200">${activeCharVal}</span>
-        </div>
-      `;
-
-      const iconButtonsHtml = currentGameMetricsDef.options.map(o => {
-        const ic = getCharacterIconUrl(o);
-        const isSelected = o === activeCharVal;
-        const btnCls = isSelected
-          ? 'bg-indigo-600/35 border-amber-400 ring-1 ring-amber-400/70 text-white font-black shadow-md scale-105'
-          : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-slate-300 hover:border-slate-700';
-        return `<button type="button" data-char-btn="${p.id}" data-char-name="${o}" onclick="pickPlayerCharacterFromIcon(${p.id}, '${o.replace(/'/g, "\\'")}')" title="${o}" class="p-1.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${btnCls}">
-          ${ic ? `<img src="${ic}" alt="${o}" class="w-7 h-7 object-contain pointer-events-none">` : `<span class="text-sm">🏎️</span>`}
-          <span class="text-[9px] leading-tight truncate w-full text-center pointer-events-none">${o}</span>
-        </button>`;
-      }).join('');
-
       metricInput = `
-        <div class="space-y-1.5">
+        <div>
           <input type="hidden" name="metric_${p.id}" value="${activeCharVal}">
-          <div id="char-icon-picker-${p.id}" class="p-1.5 rounded-xl bg-slate-950/90 border border-slate-800/90 grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-1.5 max-h-36 overflow-y-auto">
-            ${iconButtonsHtml}
-          </div>
+          <button type="button" onclick="openCharacterSelectorModal(${p.id})" class="w-full sm:w-auto min-w-[180px] px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-indigo-600/20 border border-slate-700 hover:border-indigo-500/50 flex items-center justify-between gap-2.5 transition cursor-pointer group">
+            <div class="flex items-center gap-2 min-w-0">
+              <img id="char-preview-img-${p.id}" src="${charIconUrl || ''}" alt="${activeCharVal}" class="w-7 h-7 object-contain flex-shrink-0 ${charIconUrl ? '' : 'hidden'}">
+              <span id="char-preview-label-${p.id}" class="text-xs font-black text-white group-hover:text-indigo-200 truncate">${activeCharVal}</span>
+            </div>
+            <span class="text-[10px] font-bold text-indigo-400 group-hover:text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded-lg border border-indigo-500/20 whitespace-nowrap">🎭 Cambiar</span>
+          </button>
         </div>
       `;
     }
@@ -1548,13 +1532,12 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
       : `<input type="number" name="score_${p.id}" value="${scoreVal}" step="any" class="w-full text-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-400 font-black">`;
 
     return `
-      <tr class="hover:bg-slate-800/20 align-top">
-        <td class="py-2.5 px-3 w-36 sm:w-44">
+      <tr class="hover:bg-slate-800/20">
+        <td class="py-2.5 px-3">
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: ${p.color_hex}"></span>
             <span class="font-bold text-white text-xs sm:text-sm">${p.nickname || p.name}</span>
           </div>
-          ${activeCharBadgeHtml}
         </td>
         <td class="py-2.5 px-2 manual-score-col ${hiddenClass}">
           ${rankInputHtml}
@@ -1572,6 +1555,43 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
   if (isMK && showManualScoresInConfig) {
     autoRankMarioKartScores();
   }
+}
+
+let activeCharModalPlayerId = null;
+
+function openCharacterSelectorModal(playerId) {
+  activeCharModalPlayerId = playerId;
+  const player = (currentRecordingSession?.players || []).find(p => p.id === playerId);
+  const hiddenInp = document.querySelector(`[name="metric_${playerId}"]`);
+  const curChar = hiddenInp ? hiddenInp.value : '';
+
+  const titleEl = document.getElementById('char-selector-modal-title');
+  const subEl = document.getElementById('char-selector-modal-subtitle');
+  if (titleEl && player) {
+    titleEl.textContent = `Personaje de ${player.nickname || player.name}`;
+  }
+  if (subEl) {
+    subEl.textContent = 'Toca cualquier icono para seleccionarlo al instante.';
+  }
+
+  const gridEl = document.getElementById('char-selector-modal-grid');
+  if (gridEl && currentGameMetricsDef && currentGameMetricsDef.options) {
+    gridEl.innerHTML = currentGameMetricsDef.options.map(o => {
+      const ic = getCharacterIconUrl(o);
+      const isSelected = o === curChar;
+      const btnCls = isSelected
+        ? 'bg-indigo-600/35 border-amber-400 ring-2 ring-amber-400/70 text-white font-black shadow-lg scale-105'
+        : 'bg-slate-950/90 hover:bg-slate-800 border-slate-800 text-slate-200 hover:border-indigo-500/50';
+      return `
+        <button type="button" onclick="pickPlayerCharacterFromIcon(${playerId}, '${o.replace(/'/g, "\\'")}')" class="p-2 rounded-2xl border flex flex-col items-center justify-center gap-1 transition cursor-pointer ${btnCls}">
+          ${ic ? `<img src="${ic}" alt="${o}" class="w-10 h-10 object-contain pointer-events-none">` : `<span class="text-xl">🏎️</span>`}
+          <span class="text-[10px] leading-tight truncate w-full text-center pointer-events-none">${o}</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  openModal('modal-character-selector');
 }
 
 function onPlayerCharacterSelectChange(playerId, newCharName) {
@@ -1596,17 +1616,7 @@ function pickPlayerCharacterFromIcon(playerId, charName) {
     hiddenInp.value = charName;
   }
   onPlayerCharacterSelectChange(playerId, charName);
-
-  // Update visual selection state on icon buttons without losing scroll position
-  const buttons = document.querySelectorAll(`button[data-char-btn="${playerId}"]`);
-  buttons.forEach(btn => {
-    const isSel = btn.getAttribute('data-char-name') === charName;
-    btn.className = `p-1.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition cursor-pointer ${
-      isSel
-        ? 'bg-indigo-600/35 border-amber-400 ring-1 ring-amber-400/70 text-white font-black shadow-md scale-105'
-        : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-slate-300 hover:border-slate-700'
-    }`;
-  });
+  closeModal('modal-character-selector');
 }
 
 function collectCurrentRuleValuesFromDOM() {
@@ -1727,6 +1737,23 @@ function renderDynamicGameRules(overrideValues = null) {
         <div>
           <label class="block text-slate-400 font-semibold mb-1">${r.name}</label>
           <input type="text" name="rule_${r.id}" value="${curVal}" oninput="onDynamicRuleChange(this.name, this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500">
+        </div>
+      `;
+    }
+
+    if (r.id === 'copa') {
+      const cIcon = getCupIconUrl(curVal);
+      return `
+        <div>
+          <label class="block text-slate-400 font-semibold mb-1">${r.name}</label>
+          <input type="hidden" name="rule_${r.id}" value="${curVal}">
+          <button type="button" onclick="openTrackSelectorModal('config_cup')" class="w-full bg-slate-900 hover:bg-indigo-600/20 border border-slate-700 hover:border-indigo-500/50 rounded-lg px-2.5 py-1.5 text-xs text-white flex items-center justify-between gap-2 transition cursor-pointer">
+            <div class="flex items-center gap-2 truncate">
+              ${cIcon ? `<img src="${cIcon}" class="w-5 h-5 object-contain flex-shrink-0">` : ''}
+              <span class="font-bold truncate">${curVal}</span>
+            </div>
+            <span class="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 whitespace-nowrap">🗺️ Ver Copas</span>
+          </button>
         </div>
       `;
     }
@@ -2014,9 +2041,6 @@ function startCaptureMode() {
     races
   };
 
-  const searchInp = document.getElementById('capture-track-search');
-  if (searchInp) searchInp.value = '';
-
   showMatchModalStep('capture');
   renderCaptureRaceStep();
 }
@@ -2040,17 +2064,165 @@ function jumpToCaptureRace(idx) {
   renderCaptureRaceStep();
 }
 
-function toggleCaptureTrackPicker() {
-  captureState.showTrackPicker = !captureState.showTrackPicker;
-  renderCaptureTrackSection();
+let trackSelectorModalMode = 'race'; // 'race' | 'config_cup'
+
+function openTrackSelectorModal(mode = 'race') {
+  trackSelectorModalMode = mode;
+  const searchInp = document.getElementById('track-selector-search-input');
+  if (searchInp) searchInp.value = '';
+
+  const titleEl = document.getElementById('track-selector-modal-title');
+  const subEl = document.getElementById('track-selector-modal-subtitle');
+  if (mode === 'config_cup') {
+    if (titleEl) titleEl.textContent = 'Seleccionar Copa (Catálogo Visual de Copas y Pistas)';
+    if (subEl) subEl.textContent = 'Toca cualquier copa o cualquiera de sus 4 pistas para seleccionar toda la copa.';
+  } else {
+    const rNum = (captureState.currentRaceIdx || 0) + 1;
+    if (titleEl) titleEl.textContent = `Seleccionar Pista para la Carrera #${rNum}`;
+    if (subEl) subEl.textContent = 'Todas las 96 pistas agrupadas por copa. Toca una pista para elegirla, o carga las 4 pistas de una copa.';
+  }
+
+  renderFullTrackSelectorBody('');
+  openModal('modal-track-selector');
 }
 
-function selectCaptureCup(cupName) {
-  captureState.selectedCupTab = cupName;
-  captureState.searchQuery = '';
-  const searchInp = document.getElementById('capture-track-search');
-  if (searchInp) searchInp.value = '';
+function scrollToCupInSelector(cupAnchorId) {
+  const el = document.getElementById(cupAnchorId);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function renderFullTrackSelectorBody(filterQuery = '') {
+  const q = (filterQuery || '').trim().toLowerCase();
+  const jumpStrip = document.getElementById('track-selector-cup-jump-strip');
+  const bodyEl = document.getElementById('track-selector-all-cups-body');
+  if (!bodyEl) return;
+
+  const curRace = captureState.races[captureState.currentRaceIdx] || {};
+  const activeCupInConfig = currentRuleDraftValues['copa'] || '';
+
+  // Render quick-jump cup emblems bar
+  if (jumpStrip) {
+    jumpStrip.innerHTML = MK8_CUPS_CATALOG.map((c, cIdx) => {
+      const cIcon = c.icon ? getApiUrl(c.icon) : '';
+      const shortName = c.cup.replace(/^[^\s]+\s+Copa\s+/i, '');
+      return `
+        <button type="button" onclick="scrollToCupInSelector('selector-cup-sec-${cIdx}')" title="Ir a ${c.cup}" class="px-2 py-1 rounded-xl bg-slate-950 hover:bg-indigo-600/25 border border-slate-800 hover:border-indigo-500/40 text-[10px] font-bold text-slate-300 whitespace-nowrap flex items-center gap-1 flex-shrink-0 transition cursor-pointer">
+          ${cIcon ? `<img src="${cIcon}" class="w-4 h-4 object-contain">` : ''}
+          <span>${shortName}</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  const sectionsHtml = MK8_CUPS_CATALOG.map((c, cIdx) => {
+    // Filter tracks if search query is active
+    const matchingTracks = [];
+    c.tracks.forEach((tName, tIdx) => {
+      const tIcon = c.trackIcons ? c.trackIcons[tIdx] : '';
+      if (!q || tName.toLowerCase().includes(q) || c.cup.toLowerCase().includes(q)) {
+        matchingTracks.push({ name: tName, icon: tIcon, num: tIdx + 1 });
+      }
+    });
+
+    if (matchingTracks.length === 0) return '';
+
+    const cIcon = c.icon ? getApiUrl(c.icon) : '';
+    const isCupSelected = trackSelectorModalMode === 'config_cup'
+      ? activeCupInConfig === c.cup
+      : curRace.cup_name === c.cup;
+
+    const cupHeaderBorder = isCupSelected
+      ? 'border-indigo-500/60 bg-indigo-950/40'
+      : 'border-slate-800 bg-slate-950/80';
+
+    const tracksCardsHtml = matchingTracks.map(tr => {
+      const isTrackSelected = trackSelectorModalMode === 'race' && curRace.track_name === tr.name && curRace.cup_name === c.cup;
+      const cardCls = isTrackSelected
+        ? 'bg-emerald-600/25 border-emerald-400 ring-2 ring-emerald-400/60 text-white font-black shadow-lg'
+        : 'bg-slate-950/90 hover:bg-indigo-600/20 border-slate-800 hover:border-indigo-500/60 text-slate-200 font-semibold';
+      const tIconUrl = tr.icon ? getApiUrl(tr.icon) : '';
+      const clickAction = trackSelectorModalMode === 'config_cup'
+        ? `selectEntireCupFromModal('${c.cup.replace(/'/g, "\\'")}')`
+        : `selectSingleTrackFromModal('${c.cup.replace(/'/g, "\\'")}', '${tr.name.replace(/'/g, "\\'")}')`;
+
+      return `
+        <button type="button" onclick="${clickAction}" class="p-2 rounded-2xl border text-left transition flex flex-col gap-1.5 group cursor-pointer ${cardCls}">
+          <div class="relative w-full h-16 sm:h-20 rounded-xl overflow-hidden bg-slate-900 border border-slate-800/80">
+            ${tIconUrl ? `<img src="${tIconUrl}" alt="${tr.name}" class="w-full h-full object-cover group-hover:scale-105 transition duration-200">` : ''}
+            <span class="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-slate-950/85 text-[9px] font-black text-indigo-300 border border-slate-700/80">
+              Pista ${tr.num}
+            </span>
+            ${isTrackSelected ? `<span class="absolute top-1 right-1 px-1.5 py-0.5 rounded-md bg-emerald-500 text-slate-950 text-[9px] font-black">✓ Activa</span>` : ''}
+          </div>
+          <div class="px-0.5">
+            <div class="text-xs font-bold text-white group-hover:text-indigo-200 leading-tight line-clamp-1">${tr.name}</div>
+            <div class="text-[10px] text-slate-400 truncate">${c.cup}</div>
+          </div>
+        </button>
+      `;
+    }).join('');
+
+    return `
+      <div id="selector-cup-sec-${cIdx}" class="rounded-2xl border ${cupHeaderBorder} p-3 space-y-2.5">
+        <!-- Cup Separator Header -->
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+          <div class="flex items-center gap-2">
+            ${cIcon ? `<img src="${cIcon}" alt="${c.cup}" class="w-6 h-6 object-contain">` : ''}
+            <span class="text-xs sm:text-sm font-black text-white">${c.cup}</span>
+            <span class="text-[10px] text-slate-400">(${c.tracks.length} pistas)</span>
+          </div>
+          <button type="button" onclick="selectEntireCupFromModal('${c.cup.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/30 text-[11px] font-bold transition cursor-pointer flex items-center gap-1">
+            <span>🏆</span> <span>${trackSelectorModalMode === 'config_cup' ? 'Elegir esta Copa' : 'Cargar las 4 pistas de esta Copa'}</span>
+          </button>
+        </div>
+        <!-- 4 Tracks of this Cup -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          ${tracksCardsHtml}
+        </div>
+      </div>
+    `;
+  }).filter(Boolean).join('');
+
+  bodyEl.innerHTML = sectionsHtml || `<div class="text-center py-10 text-slate-500 text-xs">No se encontraron pistas ni copas con "${filterQuery}".</div>`;
+}
+
+function selectSingleTrackFromModal(cupName, trackName) {
+  selectCaptureTrack(cupName, trackName);
+  closeModal('modal-track-selector');
+}
+
+function selectEntireCupFromModal(cupName) {
+  const cupObj = MK8_CUPS_CATALOG.find(c => c.cup === cupName);
+  if (!cupObj) return;
+
+  if (trackSelectorModalMode === 'config_cup') {
+    currentRuleDraftValues['copa'] = cupName;
+    renderDynamicGameRules();
+    closeModal('modal-track-selector');
+    return;
+  }
+
+  // In race Capture Mode: populate the 4 tracks of this Cup starting at currentRaceIdx
+  const startIdx = captureState.currentRaceIdx || 0;
+  for (let offset = 0; offset < cupObj.tracks.length; offset++) {
+    const targetRace = captureState.races[startIdx + offset];
+    if (targetRace) {
+      targetRace.cup_name = cupObj.cup;
+      targetRace.track_name = cupObj.tracks[offset];
+    }
+  }
+  captureState.selectedCupTab = cupObj.cup;
   renderCaptureTrackSection();
+  renderCapturePlayersAndStandings();
+  closeModal('modal-track-selector');
+  showToast(`Cargadas las ${cupObj.tracks.length} pistas de ${cupObj.cup}`, 'success');
+}
+
+function pickRandomFromTrackSelectorModal() {
+  pickRandomMarioKartTrack();
+  closeModal('modal-track-selector');
 }
 
 function selectCaptureTrack(cupName, trackName) {
@@ -2073,18 +2245,12 @@ function pickRandomMarioKartTrack() {
   selectCaptureTrack(randCup.cup, randTrack);
 }
 
-function filterCaptureTracks(query) {
-  captureState.searchQuery = (query || '').trim();
-  renderCaptureTrackButtonsOnly();
-}
-
 function renderCaptureTrackSection() {
   const curRace = captureState.races[captureState.currentRaceIdx];
   if (!curRace) return;
 
   const trackDisplay = document.getElementById('capture-current-track-display');
   const autoBadge = document.getElementById('capture-track-auto-badge');
-  const pickerPanel = document.getElementById('capture-track-picker-panel');
   const toggleBtn = document.getElementById('btn-toggle-track-picker');
 
   if (trackDisplay) {
@@ -2101,7 +2267,7 @@ function renderCaptureTrackSection() {
         </div>
       `;
     } else {
-      trackDisplay.innerHTML = `<span class="text-amber-400">Selecciona la pista jugada abajo ↓</span>`;
+      trackDisplay.innerHTML = `<span class="text-amber-400 underline">Haz clic aquí en "Elegir Pista" para seleccionar del catálogo →</span>`;
     }
   }
 
@@ -2109,86 +2275,9 @@ function renderCaptureTrackSection() {
     autoBadge.classList.toggle('hidden', !captureState.isAutoCup);
   }
 
-  if (pickerPanel) {
-    pickerPanel.classList.toggle('hidden', !captureState.showTrackPicker);
-  }
-
   if (toggleBtn) {
-    toggleBtn.textContent = captureState.showTrackPicker ? 'Ocultar Selector' : 'Cambiar Pista';
+    toggleBtn.innerHTML = `<span>🗺️</span> <span>${curRace.track_name ? 'Cambiar Pista' : 'Elegir Pista (Ver Todas)'}</span>`;
   }
-
-  // Render Cup Pills with Official Cup Emblems
-  const cupsGrid = document.getElementById('capture-cups-grid');
-  if (cupsGrid) {
-    cupsGrid.innerHTML = MK8_CUPS_CATALOG.map(c => {
-      const isSelected = c.cup === captureState.selectedCupTab && !captureState.searchQuery;
-      const btnCls = isSelected
-        ? 'bg-indigo-600 text-white border-indigo-500 shadow'
-        : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800';
-      const cIcon = c.icon ? getApiUrl(c.icon) : '';
-      return `
-        <button type="button" onclick="selectCaptureCup('${c.cup}')" class="px-2.5 py-1.5 rounded-xl border text-[11px] font-bold whitespace-nowrap transition flex-shrink-0 flex items-center gap-1.5 ${btnCls}">
-          ${cIcon ? `<img src="${cIcon}" alt="${c.cup}" class="w-4 h-4 object-contain">` : ''}
-          <span>${c.cup}</span>
-        </button>
-      `;
-    }).join('');
-  }
-
-  renderCaptureTrackButtonsOnly();
-}
-
-function renderCaptureTrackButtonsOnly() {
-  const curRace = captureState.races[captureState.currentRaceIdx];
-  const tracksContainer = document.getElementById('capture-tracks-buttons');
-  if (!tracksContainer || !curRace) return;
-
-  const q = (captureState.searchQuery || '').toLowerCase();
-  let trackItems = [];
-
-  if (q.length > 0) {
-    MK8_CUPS_CATALOG.forEach(c => {
-      c.tracks.forEach((t, tIdx) => {
-        if (t.toLowerCase().includes(q) || c.cup.toLowerCase().includes(q)) {
-          trackItems.push({ cup: c.cup, cupIcon: c.icon, track: t, trackIcon: c.trackIcons ? c.trackIcons[tIdx] : '' });
-        }
-      });
-    });
-  } else {
-    const activeCup = MK8_CUPS_CATALOG.find(c => c.cup === captureState.selectedCupTab) || MK8_CUPS_CATALOG[0];
-    trackItems = activeCup.tracks.map((t, tIdx) => ({
-      cup: activeCup.cup,
-      cupIcon: activeCup.icon,
-      track: t,
-      trackIcon: activeCup.trackIcons ? activeCup.trackIcons[tIdx] : ''
-    }));
-  }
-
-  if (trackItems.length === 0) {
-    tracksContainer.innerHTML = `<div class="col-span-2 text-center py-3 text-xs text-slate-500">No se encontraron pistas con "${captureState.searchQuery}".</div>`;
-    return;
-  }
-
-  tracksContainer.innerHTML = trackItems.slice(0, 12).map(item => {
-    const isCurrent = curRace.track_name === item.track && curRace.cup_name === item.cup;
-    const cls = isCurrent
-      ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300 font-black'
-      : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-slate-200 font-semibold';
-    const tIconUrl = item.trackIcon ? getApiUrl(item.trackIcon) : '';
-    const cIconUrl = item.cupIcon ? getApiUrl(item.cupIcon) : '';
-    return `
-      <button type="button" onclick="selectCaptureTrack('${item.cup}', '${item.track}')" class="p-2 rounded-xl border text-left text-xs flex items-center justify-between gap-2 transition ${cls}">
-        <div class="flex items-center gap-2.5 min-w-0">
-          ${tIconUrl ? `<img src="${tIconUrl}" alt="${item.track}" class="w-14 h-9 rounded-lg object-cover border border-slate-700 flex-shrink-0">` : ''}
-          <div class="min-w-0">
-            <div class="text-xs truncate">${item.track}</div>
-            <div class="text-[10px] text-slate-400 flex items-center gap-1 truncate">${cIconUrl ? `<img src="${cIconUrl}" class="w-3.5 h-3.5 object-contain">` : ''}<span>${item.cup}</span></div>
-          </div>
-        </div>
-        <span class="text-sm flex-shrink-0">${isCurrent ? '✅' : '🏁'}</span>
-      </button>
-    `;
-  }).join('');
 }
 
 function setPlayerRacePosition(playerId, position) {
