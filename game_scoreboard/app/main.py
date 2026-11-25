@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Game Scoreboard Add-on",
     description="Scoreboard nativo de videojuegos para Home Assistant",
-    version="1.1.0",
+    version="1.1.1",
     lifespan=lifespan
 )
 
@@ -56,6 +56,22 @@ async def serve_avatar(filename: str):
     if file_path.exists() and file_path.is_file():
         return FileResponse(str(file_path))
     return HTMLResponse(status_code=404, content="Avatar not found")
+
+
+@app.get("/api/changelog")
+async def get_changelog():
+    """Return the add-on CHANGELOG.md content and current version."""
+    candidates = [
+        BASE_DIR / "CHANGELOG.md",
+        BASE_DIR.parent / "CHANGELOG.md",
+        BASE_DIR.parent.parent / "CHANGELOG.md"
+    ]
+    content = "# Registro de Cambios\nSin cambios registrados."
+    for p in candidates:
+        if p.exists() and p.is_file():
+            content = p.read_text(encoding="utf-8")
+            break
+    return {"version": app.version, "changelog": content}
 
 
 NO_CACHE_HEADERS = {

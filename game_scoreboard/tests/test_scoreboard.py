@@ -540,3 +540,17 @@ def test_capture_mode_races_burndown_and_track_analytics():
     assert len(trk_data["track_stats"]) >= 4
     assert any(t["track_name"] == "Estadio Mario Kart" for t in trk_data["track_stats"])
     assert any(c["class_mode"] == "150cc" for c in trk_data["class_stats"])
+
+    # 5. Verify /api/changelog and Mario Kart 8 Deluxe local icons (characters, cups, tracks)
+    cl_res = client.get("/api/changelog")
+    assert cl_res.status_code == 200
+    cl_data = cl_res.json()
+    assert cl_data["version"] == "1.1.1"
+    assert "1.1.1" in cl_data["changelog"]
+
+    char_icon = client.get("/static/img/mk8/characters/mario.png")
+    assert char_icon.status_code == 200
+    cup_icon = client.get("/static/img/mk8/cups/cup_01.png")
+    assert cup_icon.status_code == 200
+    track_icon = client.get("/static/img/mk8/tracks/c01_t01_mario_kart_stadium.png")
+    assert track_icon.status_code == 200

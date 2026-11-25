@@ -16,7 +16,7 @@
     }
   </script>
   <!-- Local Critical CSS First -->
-  <link rel="stylesheet" href="static/css/styles.css?v=1.1.0">
+  <link rel="stylesheet" href="static/css/styles.css?v=1.1.1">
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Tailwind CSS CDN -->
@@ -60,7 +60,9 @@
           <div>
             <div class="flex items-center gap-1.5">
               <span class="text-sm sm:text-base font-black tracking-tight text-white">Game Scoreboard</span>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v1.1.0</span>
+              <button type="button" onclick="openChangelogModal()" title="Ver Registro de Cambios (Changelog)" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1 cursor-pointer">
+                <span>📋</span> <span>v1.1.1</span>
+              </button>
             </div>
             <p class="text-[10px] sm:text-xs text-slate-400">Torneos y Partidas entre Amigos</p>
           </div>
@@ -199,7 +201,7 @@
 
         <!-- Top Character / Meta -->
         <div class="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-start gap-3">
-          <div class="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 text-xl flex-shrink-0">🏎️</div>
+          <div id="stat-top-char-icon-box" class="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 text-xl flex-shrink-0 flex items-center justify-center w-11 h-11">🏎️</div>
           <div class="space-y-1 min-w-0 flex-1">
             <div class="text-[10px] sm:text-xs text-slate-400 uppercase font-bold tracking-wider">Personaje Más Ganador</div>
             <div class="text-base sm:text-lg font-black text-white truncate" id="stat-top-char">-</div>
@@ -1177,7 +1179,29 @@
     </div>
   </div>
 
+  <!-- Modal: Changelog / Registro de Cambios -->
+  <div id="modal-changelog" style="display: none;" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-sm overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">📋</span>
+          <div>
+            <h3 class="text-base sm:text-lg font-bold text-white">Registro de Cambios (Changelog)</h3>
+            <p class="text-xs text-slate-400">Historial de versiones de Game Scoreboard para Home Assistant</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modal-changelog')" class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 text-sm">✕</button>
+      </div>
+      <div id="changelog-modal-body" class="overflow-y-auto space-y-3 text-xs sm:text-sm text-slate-300 pr-1">
+        Cargando historial de cambios...
+      </div>
+      <div class="flex justify-end pt-2 border-t border-slate-800">
+        <button type="button" onclick="closeModal('modal-changelog')" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- JavaScript Code: loaded with relative path supported by <base> -->
-  <script src="static/js/app.js?v=1.1.0"></script>
+  <script src="static/js/app.js?v=1.1.1"></script>
 </body>
 </html>

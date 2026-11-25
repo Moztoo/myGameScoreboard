@@ -242,19 +242,24 @@ def init_db():
                 conn.commit()
             else:
                 for g in games_list:
-                    cursor.execute("SELECT rule_settings_json FROM games WHERE id = ?", (g["id"],))
+                    cursor.execute("SELECT rule_settings_json, player_metrics_json FROM games WHERE id = ?", (g["id"],))
                     row = cursor.fetchone()
                     if row:
                         try:
                             existing_rules = json.loads(row["rule_settings_json"] or "[]")
+                            existing_metrics = json.loads(row["player_metrics_json"] or "[]")
                             has_dynamic = any("match_types" in r for r in existing_rules if isinstance(r, dict))
-                            if not has_dynamic:
+                            new_metrics = g.get("player_metrics", [])
+                            old_char_cnt = len(existing_metrics[0].get("options", [])) if existing_metrics and isinstance(existing_metrics[0], dict) else 0
+                            new_char_cnt = len(new_metrics[0].get("options", [])) if new_metrics and isinstance(new_metrics[0], dict) else 0
+                            if not has_dynamic or new_char_cnt > old_char_cnt:
                                 cursor.execute("""
-                                UPDATE games SET match_types_json = ?, rule_settings_json = ?
+                                UPDATE games SET match_types_json = ?, rule_settings_json = ?, player_metrics_json = ?
                                 WHERE id = ?
                                 """, (
                                     json.dumps(g.get("match_types", [])),
                                     json.dumps(g.get("rule_settings", [])),
+                                    json.dumps(new_metrics),
                                     g["id"]
                                 ))
                         except Exception:

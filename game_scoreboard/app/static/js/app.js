@@ -322,15 +322,23 @@ function renderAdvancedStats(data) {
   const charPlayerEl = document.getElementById('stat-top-char');
   const charWinsEl = document.getElementById('stat-top-char-wins');
   const charWinrateEl = document.getElementById('stat-top-char-winrate');
+  const charIconBox = document.getElementById('stat-top-char-icon-box');
   if (charPlayerEl) {
     if (topChar) {
       charPlayerEl.textContent = topChar.character;
       charWinsEl.textContent = `${topChar.wins} victorias (${topChar.picks} carreras)`;
       charWinrateEl.textContent = `Efectividad: ${topChar.win_rate}%`;
+      if (charIconBox) {
+        const iconUrl = getCharacterIconUrl(topChar.character);
+        charIconBox.innerHTML = iconUrl
+          ? `<img src="${iconUrl}" alt="${topChar.character}" class="w-8 h-8 object-contain">`
+          : '🏎️';
+      }
     } else {
       charPlayerEl.textContent = 'Sin personaje registrado';
       charWinsEl.textContent = '0 victorias';
       charWinrateEl.textContent = 'Efectividad: 0%';
+      if (charIconBox) charIconBox.innerHTML = '🏎️';
     }
   }
 
@@ -485,11 +493,18 @@ function renderTrackAnalyticsTable() {
     const playerBadge = p
       ? `<span class="inline-flex items-center gap-1.5 font-bold text-white"><span class="w-2 h-2 rounded-full" style="background-color: ${p.color_hex}"></span>${p.nickname || p.name}</span>`
       : '-';
+    const tIcon = getTrackIconUrl(r.track_name);
+    const cIcon = getCupIconUrl(r.cup_name);
     return `
       <tr class="hover:bg-slate-800/40 transition">
         <td class="py-2 px-3">
-          <div class="font-bold text-white text-xs">${r.track_name}</div>
-          ${r.cup_name ? `<div class="text-[10px] text-slate-400">${r.cup_name}</div>` : ''}
+          <div class="flex items-center gap-2.5">
+            ${tIcon ? `<img src="${tIcon}" alt="${r.track_name}" class="w-12 h-8 rounded-lg object-cover border border-slate-700 flex-shrink-0">` : ''}
+            <div>
+              <div class="font-bold text-white text-xs">${r.track_name}</div>
+              ${r.cup_name ? `<div class="text-[10px] text-slate-400 flex items-center gap-1">${cIcon ? `<img src="${cIcon}" class="w-3.5 h-3.5 object-contain">` : ''}${r.cup_name}</div>` : ''}
+            </div>
+          </div>
         </td>
         <td class="py-2 px-2 text-center font-semibold text-sky-400">${r.times_played}</td>
         <td class="py-2 px-3">${playerBadge}</td>
@@ -840,14 +855,18 @@ function renderSessionDetail(s) {
           <span class="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-slate-300 text-[11px]">${k}: <strong class="text-indigo-300">${v}</strong></span>
         `).join('');
 
-        const scoresTable = m.scores.map(sc => `
-          <tr class="border-b border-slate-800/60 last:border-0">
-            <td class="py-2 px-3 font-bold text-slate-300 w-16">${sc.rank_position}º</td>
-            <td class="py-2 px-3 font-semibold text-white">${sc.player_nickname || sc.player_name}</td>
-            <td class="py-2 px-3 text-right font-black text-amber-400">${sc.score} pts</td>
-            <td class="py-2 px-3 text-right text-slate-400">${sc.metrics?.character || sc.metrics?.kart || '-'}</td>
-          </tr>
-        `).join('');
+        const scoresTable = m.scores.map(sc => {
+          const charOrKart = sc.metrics?.character || sc.metrics?.kart || '';
+          const charHtml = charOrKart ? renderCharacterBadgeHtml(charOrKart) : '-';
+          return `
+            <tr class="border-b border-slate-800/60 last:border-0">
+              <td class="py-2 px-3 font-bold text-slate-300 w-16">${sc.rank_position}º</td>
+              <td class="py-2 px-3 font-semibold text-white">${sc.player_nickname || sc.player_name}</td>
+              <td class="py-2 px-3 text-right font-black text-amber-400">${sc.score} pts</td>
+              <td class="py-2 px-3 text-right text-slate-300">${charHtml}</td>
+            </tr>
+          `;
+        }).join('');
 
         let racesDetailHtml = '';
         if (m.races && m.races.length > 0) {
@@ -862,12 +881,18 @@ function renderSessionDetail(s) {
               </span>`;
             }).join('');
 
+            const tIcon = getTrackIconUrl(r.track_name);
+            const cIcon = getCupIconUrl(r.cup_name);
+
             return `
               <div class="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <span class="text-[11px] font-black text-sky-400">Carrera #${r.race_number}</span>
-                  <span class="text-xs font-bold text-white ml-1.5">${r.track_name}</span>
-                  ${r.cup_name ? `<span class="text-[10px] text-slate-400 ml-1">(${r.cup_name})</span>` : ''}
+                <div class="flex items-center gap-2.5">
+                  ${tIcon ? `<img src="${tIcon}" alt="${r.track_name}" class="w-11 h-7 rounded object-cover border border-slate-700 flex-shrink-0">` : ''}
+                  <div>
+                    <span class="text-[11px] font-black text-sky-400">Carrera #${r.race_number}</span>
+                    <span class="text-xs font-bold text-white ml-1.5">${r.track_name}</span>
+                    ${r.cup_name ? `<span class="text-[10px] text-slate-400 ml-1 inline-flex items-center gap-1">(${cIcon ? `<img src="${cIcon}" class="w-3.5 h-3.5 object-contain inline">` : ''}${r.cup_name})</span>` : ''}
+                  </div>
                 </div>
                 <div class="flex flex-wrap gap-1.5">${pBadges}</div>
               </div>
@@ -1163,34 +1188,159 @@ let showManualScoresInConfig = false;
 let postMatchBurndownChartInstance = null;
 const sessionMatchBurndownCharts = {};
 
-// Official Mario Kart 8 Deluxe 24 Cups (96 Tracks) + Battle Stages Catalog
+// Official Mario Kart 8 Deluxe 48 Character Icons Map
+const MK8_CHARACTER_ICONS = {
+  "Mario": "static/img/mk8/characters/mario.png",
+  "Luigi": "static/img/mk8/characters/luigi.png",
+  "Peach": "static/img/mk8/characters/peach.png",
+  "Daisy": "static/img/mk8/characters/daisy.png",
+  "Rosalina": "static/img/mk8/characters/rosalina.png",
+  "Tanooki Mario": "static/img/mk8/characters/tanooki_mario.png",
+  "Cat Peach": "static/img/mk8/characters/cat_peach.png",
+  "Birdo": "static/img/mk8/characters/birdo.png",
+  "Yoshi": "static/img/mk8/characters/yoshi.png",
+  "Toad": "static/img/mk8/characters/toad.png",
+  "Koopa Troopa": "static/img/mk8/characters/koopa_troopa.png",
+  "Shy Guy": "static/img/mk8/characters/shy_guy.png",
+  "Lakitu": "static/img/mk8/characters/lakitu.png",
+  "Toadette": "static/img/mk8/characters/toadette.png",
+  "King Boo": "static/img/mk8/characters/king_boo.png",
+  "Petey Piranha": "static/img/mk8/characters/petey_piranha.png",
+  "Baby Mario": "static/img/mk8/characters/baby_mario.png",
+  "Baby Luigi": "static/img/mk8/characters/baby_luigi.png",
+  "Baby Peach": "static/img/mk8/characters/baby_peach.png",
+  "Baby Daisy": "static/img/mk8/characters/baby_daisy.png",
+  "Baby Rosalina": "static/img/mk8/characters/baby_rosalina.png",
+  "Metal Mario": "static/img/mk8/characters/metal_mario.png",
+  "Pink Gold Peach": "static/img/mk8/characters/pink_gold_peach.png",
+  "Wiggler": "static/img/mk8/characters/wiggler.png",
+  "Wario": "static/img/mk8/characters/wario.png",
+  "Waluigi": "static/img/mk8/characters/waluigi.png",
+  "Donkey Kong": "static/img/mk8/characters/donkey_kong.png",
+  "Bowser": "static/img/mk8/characters/bowser.png",
+  "Dry Bones": "static/img/mk8/characters/dry_bones.png",
+  "Bowser Jr.": "static/img/mk8/characters/bowser_jr.png",
+  "Dry Bowser": "static/img/mk8/characters/dry_bowser.png",
+  "Kamek": "static/img/mk8/characters/kamek.png",
+  "Lemmy": "static/img/mk8/characters/lemmy.png",
+  "Larry": "static/img/mk8/characters/larry.png",
+  "Wendy": "static/img/mk8/characters/wendy.png",
+  "Ludwig": "static/img/mk8/characters/ludwig.png",
+  "Iggy": "static/img/mk8/characters/iggy.png",
+  "Roy": "static/img/mk8/characters/roy.png",
+  "Morton": "static/img/mk8/characters/morton.png",
+  "Peachette": "static/img/mk8/characters/peachette.png",
+  "Inkling": "static/img/mk8/characters/inkling_girl.png",
+  "Inkling Girl": "static/img/mk8/characters/inkling_girl.png",
+  "Villager": "static/img/mk8/characters/villager.png",
+  "Isabelle": "static/img/mk8/characters/isabelle.png",
+  "Link": "static/img/mk8/characters/link_champion_s_tunic.png",
+  "Diddy Kong": "static/img/mk8/characters/diddy_kong.png",
+  "Funky Kong": "static/img/mk8/characters/funky_kong.png",
+  "Pauline": "static/img/mk8/characters/pauline.png",
+  "Mii": "static/img/mk8/characters/mii.png",
+  "Otro / Mii": "static/img/mk8/characters/mii.png"
+};
+
+// Official Mario Kart 8 Deluxe 24 Cups (96 Tracks) + Battle Stages Catalog with Local Icons
 const MK8_CUPS_CATALOG = [
-  { cup: "🍄 Copa Champiñón", tracks: ["Estadio Mario Kart", "Parque Acuático", "Barranco Goloso", "Ruinas Roca Picuda"] },
-  { cup: "🌸 Copa Flor", tracks: ["Circuito Mario", "Puerto Toad", "Mansión Retorcida", "Cataratas Shy Guy"] },
-  { cup: "⭐ Copa Estrella", tracks: ["Aeropuerto Soleado", "Cala Delfín", "Electródromo", "Cumbre Wario"] },
-  { cup: "👑 Copa Especial", tracks: ["Ruta Celeste", "Desierto Seco-Seco", "Castillo de Bowser", "Senda Arco Iris"] },
-  { cup: "🐢 Copa Caparazón", tracks: ["Wii Pradera Mu-Mu", "GBA Circuito Mario", "DS Playa Cheep Cheep", "N64 Autopista de Toad"] },
-  { cup: "🍌 Copa Plátano", tracks: ["GCN Desierto Seco-Seco", "SNES Prado Rosquilla 3", "N64 Pista Real", "3DS Jungla DK"] },
-  { cup: "🍂 Copa Hoja", tracks: ["DS Estadio Wario", "GCN Tierra Sorbete", "3DS Autopista Musical", "N64 Valle de Yoshi"] },
-  { cup: "⚡ Copa Centella", tracks: ["DS Reloj Tictac", "3DS Tuberías Planta Piraña", "Wii Volcán Gruñón", "N64 Senda Arco Iris"] },
-  { cup: "🥚 Copa Huevo", tracks: ["GCN Circuito Yoshi", "Estadio Excitebike", "Ruta Dragón", "Mute City"] },
-  { cup: "🗡️ Copa Trifuerza", tracks: ["Wii Mina de Wario", "SNES Senda Arco Iris", "Estación Glaciar", "Circuito de Hyrule"] },
-  { cup: "🍃 Copa Crossing", tracks: ["GCN Parque Bebé", "GBA Tierra de Queso", "Bosque Mágico", "Animal Crossing"] },
-  { cup: "🔔 Copa Campana", tracks: ["3DS Ciudad Koopa", "GBA Ruta del Lazo", "Metro Campana", "Big Blue"] },
-  { cup: "🪙 Copa Turbo Dorada", tracks: ["Tour Bulevares de París", "3DS Circuito Toad", "N64 Monte Chocolate", "Wii Centro Cocotero"] },
-  { cup: "🐱 Copa Felina Fortuna", tracks: ["Tour Circuito de Tokio", "DS Colinas Champiñón", "GBA Jardín Celeste", "Mansión Ninja"] },
-  { cup: "🥕 Copa Nabo", tracks: ["Tour Visita a Nueva York", "SNES Circuito Mario 3", "N64 Desierto Kalimari", "DS Pinball Waluigi"] },
-  { cup: "🚁 Copa Hélice", tracks: ["Tour Sídney sin Pausa", "GBA Tierra Nevada", "Wii Barranco Champiñón", "Cielos Helados"] },
-  { cup: "🪨 Copa Roca", tracks: ["Tour Ronda por Londres", "GBA Lago de Boo", "3DS Montaña Roqui-Roque", "Wii Camino Forestal"] },
-  { cup: "🌙 Copa Luna", tracks: ["Tour Berlín de Vértigo", "DS Jardín de Peach", "Aldea de los Regalos", "3DS Senda Arco Iris"] },
-  { cup: "🍎 Copa Fruta", tracks: ["Tour Derrapes en Ámsterdam", "GBA Parque de la Ribera", "Wii Cumbre DK", "Isla de Yoshi"] },
-  { cup: "🪃 Copa Bumerán", tracks: ["Tour Atardecer en Bangkok", "DS Circuito Mario", "GCN Estadio Waluigi", "Tour Acelerón en Singapur"] },
-  { cup: "🪶 Copa Pluma", tracks: ["Tour Periplo Ateniense", "GCN Crucero Daisy", "Wii Circuito Luz de Luna", "Bañódromo"] },
-  { cup: "🍒 Copa Cereza", tracks: ["Tour A Todo Gas en Los Ángeles", "GBA Reserva Natural del Poniente", "Wii Colina de Koopa", "Tour Vuelta por Vancouver"] },
-  { cup: "🌰 Copa Bellota", tracks: ["Tour Roma Bajo la Luna", "GCN Montaña DK", "Wii Circuito de Daisy", "Ruinas Planta Piraña"] },
-  { cup: "💙 Copa Picos", tracks: ["Tour Paseo por Madrid", "3DS Glaciar de Rosalina", "SNES Castillo de Bowser 3", "Wii Senda Arco Iris"] },
-  { cup: "🎈 Escenarios Batalla", tracks: ["Estadio de Batalla", "Cielo Azucarado", "Palacio Dragón", "Estación Lunar", "3DS Wuhu Pueblo", "GCN Mansión de Luigi", "SNES Circuito de Batalla 1", "Parque Viaducto"] }
+  { cup: "🍄 Copa Champiñón", icon: "static/img/mk8/cups/cup_01.png", tracks: ["Estadio Mario Kart", "Parque Acuático", "Barranco Goloso", "Ruinas Roca Picuda"], trackIcons: ["static/img/mk8/tracks/c01_t01_mario_kart_stadium.png", "static/img/mk8/tracks/c01_t02_water_park.png", "static/img/mk8/tracks/c01_t03_sweet_sweet_canyon.png", "static/img/mk8/tracks/c01_t04_thwomp_ruins.png"] },
+  { cup: "🌸 Copa Flor", icon: "static/img/mk8/cups/cup_02.png", tracks: ["Circuito Mario", "Puerto Toad", "Mansión Retorcida", "Cataratas Shy Guy"], trackIcons: ["static/img/mk8/tracks/c02_t01_mario_circuit.png", "static/img/mk8/tracks/c02_t02_toad_harbor.png", "static/img/mk8/tracks/c02_t03_twisted_mansion.png", "static/img/mk8/tracks/c02_t04_shy_guy_falls.png"] },
+  { cup: "⭐ Copa Estrella", icon: "static/img/mk8/cups/cup_03.png", tracks: ["Aeropuerto Soleado", "Cala Delfín", "Electródromo", "Cumbre Wario"], trackIcons: ["static/img/mk8/tracks/c03_t01_sunshine_airport.png", "static/img/mk8/tracks/c03_t02_dolphin_shoals.png", "static/img/mk8/tracks/c03_t03_electrodrome.png", "static/img/mk8/tracks/c03_t04_mount_wario.png"] },
+  { cup: "👑 Copa Especial", icon: "static/img/mk8/cups/cup_04.png", tracks: ["Ruta Celeste", "Desierto Seco-Seco", "Castillo de Bowser", "Senda Arco Iris"], trackIcons: ["static/img/mk8/tracks/c04_t01_cloudtop_cruise.png", "static/img/mk8/tracks/c04_t02_bone_dry_dunes.png", "static/img/mk8/tracks/c04_t03_bowser_s_castle.png", "static/img/mk8/tracks/c04_t04_rainbow_road.png"] },
+  { cup: "🐢 Copa Caparazón", icon: "static/img/mk8/cups/cup_05.png", tracks: ["Wii Pradera Mu-Mu", "GBA Circuito Mario", "DS Playa Cheep Cheep", "N64 Autopista de Toad"], trackIcons: ["static/img/mk8/tracks/c05_t01_wii_moo_moo_meadows.png", "static/img/mk8/tracks/c05_t02_gba_mario_circuit.png", "static/img/mk8/tracks/c05_t03_ds_cheep_cheep_beach.png", "static/img/mk8/tracks/c05_t04_n64_toad_s_turnpike.png"] },
+  { cup: "🍌 Copa Plátano", icon: "static/img/mk8/cups/cup_06.png", tracks: ["GCN Desierto Seco-Seco", "SNES Prado Rosquilla 3", "N64 Pista Real", "3DS Jungla DK"], trackIcons: ["static/img/mk8/tracks/c06_t01_gcn_dry_dry_desert.png", "static/img/mk8/tracks/c06_t02_snes_donut_plains_3.png", "static/img/mk8/tracks/c06_t03_n64_royal_raceway.png", "static/img/mk8/tracks/c06_t04_3ds_dk_jungle.png"] },
+  { cup: "🍂 Copa Hoja", icon: "static/img/mk8/cups/cup_07.png", tracks: ["DS Estadio Wario", "GCN Tierra Sorbete", "3DS Autopista Musical", "N64 Valle de Yoshi"], trackIcons: ["static/img/mk8/tracks/c07_t01_ds_wario_stadium.png", "static/img/mk8/tracks/c07_t02_gcn_sherbet_land.png", "static/img/mk8/tracks/c07_t03_3ds_music_park.png", "static/img/mk8/tracks/c07_t04_n64_yoshi_valley.png"] },
+  { cup: "⚡ Copa Centella", icon: "static/img/mk8/cups/cup_08.png", tracks: ["DS Reloj Tictac", "3DS Tuberías Planta Piraña", "Wii Volcán Gruñón", "N64 Senda Arco Iris"], trackIcons: ["static/img/mk8/tracks/c08_t01_ds_tick_tock_clock.png", "static/img/mk8/tracks/c08_t02_3ds_piranha_plant_slide.png", "static/img/mk8/tracks/c08_t03_wii_grumble_volcano.png", "static/img/mk8/tracks/c08_t04_n64_rainbow_road.png"] },
+  { cup: "🥚 Copa Huevo", icon: "static/img/mk8/cups/cup_09.png", tracks: ["GCN Circuito Yoshi", "Estadio Excitebike", "Ruta Dragón", "Mute City"], trackIcons: ["static/img/mk8/tracks/c09_t01_gcn_yoshi_circuit.png", "static/img/mk8/tracks/c09_t02_excitebike_arena.png", "static/img/mk8/tracks/c09_t03_dragon_driftway.png", "static/img/mk8/tracks/c09_t04_mute_city.png"] },
+  { cup: "🗡️ Copa Trifuerza", icon: "static/img/mk8/cups/cup_10.png", tracks: ["Wii Mina de Wario", "SNES Senda Arco Iris", "Estación Glaciar", "Circuito de Hyrule"], trackIcons: ["static/img/mk8/tracks/c10_t01_wii_wario_s_gold_mine.png", "static/img/mk8/tracks/c10_t02_snes_rainbow_road.png", "static/img/mk8/tracks/c10_t03_ice_ice_outpost.png", "static/img/mk8/tracks/c10_t04_hyrule_circuit.png"] },
+  { cup: "🍃 Copa Crossing", icon: "static/img/mk8/cups/cup_11.png", tracks: ["GCN Parque Bebé", "GBA Tierra de Queso", "Bosque Mágico", "Animal Crossing"], trackIcons: ["static/img/mk8/tracks/c11_t01_gcn_baby_park.png", "static/img/mk8/tracks/c11_t02_gba_cheese_land.png", "static/img/mk8/tracks/c11_t03_wild_woods.png", "static/img/mk8/tracks/c11_t04_animal_crossing.png"] },
+  { cup: "🔔 Copa Campana", icon: "static/img/mk8/cups/cup_12.png", tracks: ["3DS Ciudad Koopa", "GBA Ruta del Lazo", "Metro Campana", "Big Blue"], trackIcons: ["static/img/mk8/tracks/c12_t01_3ds_neo_bowser_city.png", "static/img/mk8/tracks/c12_t02_gba_ribbon_road.png", "static/img/mk8/tracks/c12_t03_super_bell_subway.png", "static/img/mk8/tracks/c12_t04_big_blue.png"] },
+  { cup: "🪙 Copa Turbo Dorada", icon: "static/img/mk8/cups/cup_13.png", tracks: ["Tour Bulevares de París", "3DS Circuito Toad", "N64 Monte Chocolate", "Wii Centro Cocotero"], trackIcons: ["static/img/mk8/tracks/c13_t01_tour_paris_promenade.png", "static/img/mk8/tracks/c13_t02_3ds_toad_circuit.png", "static/img/mk8/tracks/c13_t03_n64_choco_mountain.png", "static/img/mk8/tracks/c13_t04_wii_coconut_mall.png"] },
+  { cup: "🐱 Copa Felina Fortuna", icon: "static/img/mk8/cups/cup_14.png", tracks: ["Tour Circuito de Tokio", "DS Colinas Champiñón", "GBA Jardín Celeste", "Mansión Ninja"], trackIcons: ["static/img/mk8/tracks/c14_t01_tour_tokyo_blur.png", "static/img/mk8/tracks/c14_t02_ds_shroom_ridge.png", "static/img/mk8/tracks/c14_t03_gba_sky_garden.png", "static/img/mk8/tracks/c14_t04_ninja_hideaway.png"] },
+  { cup: "🥕 Copa Nabo", icon: "static/img/mk8/cups/cup_15.png", tracks: ["Tour Visita a Nueva York", "SNES Circuito Mario 3", "N64 Desierto Kalimari", "DS Pinball Waluigi"], trackIcons: ["static/img/mk8/tracks/c15_t01_tour_new_york_minute.png", "static/img/mk8/tracks/c15_t02_snes_mario_circuit_3.png", "static/img/mk8/tracks/c15_t03_n64_kalimari_desert.png", "static/img/mk8/tracks/c15_t04_ds_waluigi_pinball.png"] },
+  { cup: "🚁 Copa Hélice", icon: "static/img/mk8/cups/cup_16.png", tracks: ["Tour Sídney sin Pausa", "GBA Tierra Nevada", "Wii Barranco Champiñón", "Cielos Helados"], trackIcons: ["static/img/mk8/tracks/c16_t01_tour_sydney_sprint.png", "static/img/mk8/tracks/c16_t02_gba_snow_land.png", "static/img/mk8/tracks/c16_t03_wii_mushroom_gorge.png", "static/img/mk8/tracks/c16_t04_sky_high_sundae.png"] },
+  { cup: "🪨 Copa Roca", icon: "static/img/mk8/cups/cup_17.png", tracks: ["Tour Ronda por Londres", "GBA Lago de Boo", "3DS Montaña Roqui-Roque", "Wii Camino Forestal"], trackIcons: ["static/img/mk8/tracks/c17_t01_tour_london_loop.png", "static/img/mk8/tracks/c17_t02_gba_boo_lake.png", "static/img/mk8/tracks/c17_t03_3ds_rock_rock_mountain.png", "static/img/mk8/tracks/c17_t04_wii_maple_treeway.png"] },
+  { cup: "🌙 Copa Luna", icon: "static/img/mk8/cups/cup_18.png", tracks: ["Tour Berlín de Vértigo", "DS Jardín de Peach", "Aldea de los Regalos", "3DS Senda Arco Iris"], trackIcons: ["static/img/mk8/tracks/c18_t01_tour_berlin_byways.png", "static/img/mk8/tracks/c18_t02_ds_peach_gardens.png", "static/img/mk8/tracks/c18_t03_merry_mountain.png", "static/img/mk8/tracks/c18_t04_3ds_rainbow_road.png"] },
+  { cup: "🍎 Copa Fruta", icon: "static/img/mk8/cups/cup_19.png", tracks: ["Tour Derrapes en Ámsterdam", "GBA Parque de la Ribera", "Wii Cumbre DK", "Isla de Yoshi"], trackIcons: ["static/img/mk8/tracks/c19_t01_tour_amsterdam_drift.png", "static/img/mk8/tracks/c19_t02_gba_riverside_park.png", "static/img/mk8/tracks/c19_t03_wii_dk_summit.png", "static/img/mk8/tracks/c19_t04_yoshi_s_island.png"] },
+  { cup: "🪃 Copa Bumerán", icon: "static/img/mk8/cups/cup_20.png", tracks: ["Tour Atardecer en Bangkok", "DS Circuito Mario", "GCN Estadio Waluigi", "Tour Acelerón en Singapur"], trackIcons: ["static/img/mk8/tracks/c20_t01_tour_bangkok_rush.png", "static/img/mk8/tracks/c20_t02_ds_mario_circuit.png", "static/img/mk8/tracks/c20_t03_gcn_waluigi_stadium.png", "static/img/mk8/tracks/c20_t04_tour_singapore_speedway.png"] },
+  { cup: "🪶 Copa Pluma", icon: "static/img/mk8/cups/cup_21.png", tracks: ["Tour Periplo Ateniense", "GCN Crucero Daisy", "Wii Circuito Luz de Luna", "Bañódromo"], trackIcons: ["static/img/mk8/tracks/c21_t01_tour_athens_dash.png", "static/img/mk8/tracks/c21_t02_gcn_daisy_cruiser.png", "static/img/mk8/tracks/c21_t03_wii_moonview_highway.png", "static/img/mk8/tracks/c21_t04_squeaky_clean_sprint.png"] },
+  { cup: "🍒 Copa Cereza", icon: "static/img/mk8/cups/cup_22.png", tracks: ["Tour A Todo Gas en Los Ángeles", "GBA Reserva Natural del Poniente", "Wii Colina de Koopa", "Tour Vuelta por Vancouver"], trackIcons: ["static/img/mk8/tracks/c22_t01_tour_los_angeles_laps.png", "static/img/mk8/tracks/c22_t02_gba_sunset_wilds.png", "static/img/mk8/tracks/c22_t03_wii_koopa_cape.png", "static/img/mk8/tracks/c22_t04_tour_vancouver_velocity.png"] },
+  { cup: "🌰 Copa Bellota", icon: "static/img/mk8/cups/cup_23.png", tracks: ["Tour Roma Bajo la Luna", "GCN Montaña DK", "Wii Circuito de Daisy", "Ruinas Planta Piraña"], trackIcons: ["static/img/mk8/tracks/c23_t01_tour_rome_avanti.png", "static/img/mk8/tracks/c23_t02_gcn_dk_mountain.png", "static/img/mk8/tracks/c23_t03_wii_daisy_circuit.png", "static/img/mk8/tracks/c23_t04_piranha_plant_cove.png"] },
+  { cup: "💙 Copa Picos", icon: "static/img/mk8/cups/cup_24.png", tracks: ["Tour Paseo por Madrid", "3DS Glaciar de Rosalina", "SNES Castillo de Bowser 3", "Wii Senda Arco Iris"], trackIcons: ["static/img/mk8/tracks/c24_t01_tour_madrid_drive.png", "static/img/mk8/tracks/c24_t02_3ds_rosalina_s_ice_world.png", "static/img/mk8/tracks/c24_t03_snes_bowser_castle_3.png", "static/img/mk8/tracks/c24_t04_wii_rainbow_road.png"] },
+  { cup: "🎈 Escenarios Batalla", icon: "static/img/mk8/cups/cup_01.png", tracks: ["Estadio de Batalla", "Cielo Azucarado", "Palacio Dragón", "Estación Lunar", "3DS Wuhu Pueblo", "GCN Mansión de Luigi", "SNES Circuito de Batalla 1", "Parque Viaducto"], trackIcons: ["static/img/mk8/tracks/c25_t01_battle_stadium.png", "static/img/mk8/tracks/c25_t02_sweet_sweet_kingdom.png", "static/img/mk8/tracks/c25_t03_dragon_palace.png", "static/img/mk8/tracks/c25_t04_lunar_colony.png", "static/img/mk8/tracks/c25_t05_3ds_wuhu_town.png", "static/img/mk8/tracks/c25_t06_gcn_luigi_s_mansion.png", "static/img/mk8/tracks/c25_t07_snes_battle_course_1.png", "static/img/mk8/tracks/c25_t08_urchin_underpass.png"] }
 ];
+
+function getCharacterIconUrl(charName) {
+  if (!charName) return '';
+  if (MK8_CHARACTER_ICONS[charName]) return getApiUrl(MK8_CHARACTER_ICONS[charName]);
+  const foundKey = Object.keys(MK8_CHARACTER_ICONS).find(k => k.toLowerCase() === String(charName).toLowerCase());
+  return foundKey ? getApiUrl(MK8_CHARACTER_ICONS[foundKey]) : '';
+}
+
+function getCupIconUrl(cupName) {
+  if (!cupName) return '';
+  const found = MK8_CUPS_CATALOG.find(c => c.cup === cupName || c.cup.toLowerCase().includes(String(cupName).toLowerCase()));
+  return (found && found.icon) ? getApiUrl(found.icon) : '';
+}
+
+function getTrackIconUrl(trackName) {
+  if (!trackName) return '';
+  for (const c of MK8_CUPS_CATALOG) {
+    const idx = c.tracks.findIndex(t => t === trackName || t.toLowerCase() === String(trackName).toLowerCase());
+    if (idx >= 0 && c.trackIcons && c.trackIcons[idx]) {
+      return getApiUrl(c.trackIcons[idx]);
+    }
+  }
+  return '';
+}
+
+function renderCharacterBadgeHtml(charName) {
+  if (!charName) return '';
+  const icon = getCharacterIconUrl(charName);
+  if (icon) {
+    return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-200 text-xs font-semibold">
+      <img src="${icon}" alt="${charName}" class="w-5 h-5 object-contain">
+      <span>${charName}</span>
+    </span>`;
+  }
+  return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 text-xs">${charName}</span>`;
+}
+
+async function openChangelogModal() {
+  openModal('modal-changelog');
+  const bodyEl = document.getElementById('changelog-modal-body');
+  if (!bodyEl) return;
+  try {
+    const res = await fetch(getApiUrl('/api/changelog'));
+    if (!res.ok) throw new Error('Error loading changelog');
+    const data = await res.json();
+    const lines = (data.changelog || '').split('\n');
+    const htmlLines = lines.map(line => {
+      if (line.startsWith('## ')) {
+        return `<h4 class="text-sm sm:text-base font-black text-indigo-400 pt-3 border-t border-slate-800 first:border-0 first:pt-0">${line.replace('## ', '🚀 ')}</h4>`;
+      }
+      if (line.startsWith('### ')) {
+        return `<div class="text-xs font-bold uppercase tracking-wider text-amber-400 mt-2">${line.replace('### ', '')}</div>`;
+      }
+      if (line.startsWith('# ')) {
+        return '';
+      }
+      if (line.trim() === '---') {
+        return '';
+      }
+      if (line.trim().startsWith('- ')) {
+        const clean = line.trim().substring(2).replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>').replace(/`(.*?)`/g, '<code class="px-1 py-0.5 rounded bg-slate-800 text-indigo-300 text-[11px]">$1</code>');
+        const indent = line.startsWith('  ') ? 'ml-4 text-slate-400' : 'text-slate-200';
+        return `<div class="flex items-start gap-2 ${indent}"><span class="text-indigo-400">•</span><span>${clean}</span></div>`;
+      }
+      return line.trim() ? `<p class="text-slate-400 text-xs">${line}</p>` : '';
+    }).join('');
+    bodyEl.innerHTML = htmlLines;
+  } catch (err) {
+    bodyEl.innerHTML = `<div class="text-rose-400 text-xs">No se pudo cargar el registro de cambios.</div>`;
+  }
+}
 
 let captureState = {
   totalRaces: 4,
@@ -1342,10 +1492,34 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
 
     let metricInput = `<input type="text" name="metric_${p.id}" value="${metricVal}" placeholder="ej. Mario / Yoshi" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">`;
     if (currentGameMetricsDef && currentGameMetricsDef.type === 'select' && currentGameMetricsDef.options) {
+      const activeCharVal = metricVal || currentGameMetricsDef.options[0];
+      const charIconUrl = getCharacterIconUrl(activeCharVal);
       const opts = currentGameMetricsDef.options.map(o => `
-        <option value="${o}" ${o === metricVal ? 'selected' : ''}>${o}</option>
+        <option value="${o}" ${o === activeCharVal ? 'selected' : ''}>${o}</option>
       `).join('');
-      metricInput = `<select name="metric_${p.id}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">${opts}</select>`;
+
+      const iconGridHtml = isMK
+        ? `<div id="char-icon-picker-${p.id}" class="hidden mt-2 p-2 rounded-xl bg-slate-950 border border-slate-800 grid grid-cols-6 sm:grid-cols-8 gap-1.5 max-h-44 overflow-y-auto">
+            ${currentGameMetricsDef.options.map(o => {
+              const ic = getCharacterIconUrl(o);
+              return `<button type="button" onclick="pickPlayerCharacterFromIcon(${p.id}, '${o.replace(/'/g, "\\'")}')" title="${o}" class="p-1 rounded-lg bg-slate-900 hover:bg-indigo-600/30 border border-slate-800 hover:border-indigo-500 flex flex-col items-center gap-0.5 transition">
+                ${ic ? `<img src="${ic}" alt="${o}" class="w-6 h-6 object-contain">` : `<span class="text-xs">🏎️</span>`}
+                <span class="text-[9px] text-slate-300 truncate w-full text-center">${o}</span>
+              </button>`;
+            }).join('')}
+           </div>`
+        : '';
+
+      metricInput = `
+        <div>
+          <div class="flex items-center gap-2">
+            <img id="char-preview-img-${p.id}" src="${charIconUrl || ''}" alt="${activeCharVal}" class="w-7 h-7 object-contain flex-shrink-0 ${charIconUrl ? '' : 'hidden'}">
+            <select name="metric_${p.id}" onchange="onPlayerCharacterSelectChange(${p.id}, this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500">${opts}</select>
+            ${isMK ? `<button type="button" onclick="toggleCharacterIconGrid(${p.id})" title="Elegir personaje por icono" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs flex-shrink-0">🎭</button>` : ''}
+          </div>
+          ${iconGridHtml}
+        </div>
+      `;
     }
 
     const rankInputHtml = isMK
@@ -1378,6 +1552,35 @@ function updateMatchParticipantsUI(existingScoresMap = null) {
   if (isMK && showManualScoresInConfig) {
     autoRankMarioKartScores();
   }
+}
+
+function onPlayerCharacterSelectChange(playerId, newCharName) {
+  const img = document.getElementById(`char-preview-img-${playerId}`);
+  const url = getCharacterIconUrl(newCharName);
+  if (img) {
+    if (url) {
+      img.src = url;
+      img.alt = newCharName;
+      img.classList.remove('hidden');
+    } else {
+      img.classList.add('hidden');
+    }
+  }
+}
+
+function toggleCharacterIconGrid(playerId) {
+  const grid = document.getElementById(`char-icon-picker-${playerId}`);
+  if (grid) grid.classList.toggle('hidden');
+}
+
+function pickPlayerCharacterFromIcon(playerId, charName) {
+  const sel = document.querySelector(`[name="metric_${playerId}"]`);
+  if (sel) {
+    sel.value = charName;
+  }
+  onPlayerCharacterSelectChange(playerId, charName);
+  const grid = document.getElementById(`char-icon-picker-${playerId}`);
+  if (grid) grid.classList.add('hidden');
 }
 
 function collectCurrentRuleValuesFromDOM() {
@@ -1860,7 +2063,17 @@ function renderCaptureTrackSection() {
 
   if (trackDisplay) {
     if (curRace.track_name) {
-      trackDisplay.innerHTML = `${curRace.cup_name ? `<span class="text-indigo-400 font-bold">${curRace.cup_name}</span> · ` : ''}<span class="text-white">${curRace.track_name}</span>`;
+      const tIcon = getTrackIconUrl(curRace.track_name);
+      const cIcon = getCupIconUrl(curRace.cup_name);
+      trackDisplay.innerHTML = `
+        <div class="flex items-center gap-2.5 mt-1">
+          ${tIcon ? `<img src="${tIcon}" alt="${curRace.track_name}" class="w-16 h-10 rounded-lg object-cover border border-indigo-500/40 shadow flex-shrink-0">` : ''}
+          <div>
+            <div class="text-sm sm:text-base font-black text-white">${curRace.track_name}</div>
+            ${curRace.cup_name ? `<div class="text-xs text-indigo-400 font-bold flex items-center gap-1">${cIcon ? `<img src="${cIcon}" class="w-4 h-4 object-contain">` : ''}<span>${curRace.cup_name}</span></div>` : ''}
+          </div>
+        </div>
+      `;
     } else {
       trackDisplay.innerHTML = `<span class="text-amber-400">Selecciona la pista jugada abajo ↓</span>`;
     }
@@ -1878,7 +2091,7 @@ function renderCaptureTrackSection() {
     toggleBtn.textContent = captureState.showTrackPicker ? 'Ocultar Selector' : 'Cambiar Pista';
   }
 
-  // Render Cup Pills
+  // Render Cup Pills with Official Cup Emblems
   const cupsGrid = document.getElementById('capture-cups-grid');
   if (cupsGrid) {
     cupsGrid.innerHTML = MK8_CUPS_CATALOG.map(c => {
@@ -1886,9 +2099,11 @@ function renderCaptureTrackSection() {
       const btnCls = isSelected
         ? 'bg-indigo-600 text-white border-indigo-500 shadow'
         : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800';
+      const cIcon = c.icon ? getApiUrl(c.icon) : '';
       return `
-        <button type="button" onclick="selectCaptureCup('${c.cup}')" class="px-2.5 py-1 rounded-xl border text-[11px] font-bold whitespace-nowrap transition flex-shrink-0 ${btnCls}">
-          ${c.cup}
+        <button type="button" onclick="selectCaptureCup('${c.cup}')" class="px-2.5 py-1.5 rounded-xl border text-[11px] font-bold whitespace-nowrap transition flex-shrink-0 flex items-center gap-1.5 ${btnCls}">
+          ${cIcon ? `<img src="${cIcon}" alt="${c.cup}" class="w-4 h-4 object-contain">` : ''}
+          <span>${c.cup}</span>
         </button>
       `;
     }).join('');
@@ -1907,15 +2122,20 @@ function renderCaptureTrackButtonsOnly() {
 
   if (q.length > 0) {
     MK8_CUPS_CATALOG.forEach(c => {
-      c.tracks.forEach(t => {
+      c.tracks.forEach((t, tIdx) => {
         if (t.toLowerCase().includes(q) || c.cup.toLowerCase().includes(q)) {
-          trackItems.push({ cup: c.cup, track: t });
+          trackItems.push({ cup: c.cup, cupIcon: c.icon, track: t, trackIcon: c.trackIcons ? c.trackIcons[tIdx] : '' });
         }
       });
     });
   } else {
     const activeCup = MK8_CUPS_CATALOG.find(c => c.cup === captureState.selectedCupTab) || MK8_CUPS_CATALOG[0];
-    trackItems = activeCup.tracks.map(t => ({ cup: activeCup.cup, track: t }));
+    trackItems = activeCup.tracks.map((t, tIdx) => ({
+      cup: activeCup.cup,
+      cupIcon: activeCup.icon,
+      track: t,
+      trackIcon: activeCup.trackIcons ? activeCup.trackIcons[tIdx] : ''
+    }));
   }
 
   if (trackItems.length === 0) {
@@ -1923,18 +2143,23 @@ function renderCaptureTrackButtonsOnly() {
     return;
   }
 
-  tracksContainer.innerHTML = trackItems.slice(0, 12).map((item, idx) => {
+  tracksContainer.innerHTML = trackItems.slice(0, 12).map(item => {
     const isCurrent = curRace.track_name === item.track && curRace.cup_name === item.cup;
     const cls = isCurrent
       ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300 font-black'
       : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-slate-200 font-semibold';
+    const tIconUrl = item.trackIcon ? getApiUrl(item.trackIcon) : '';
+    const cIconUrl = item.cupIcon ? getApiUrl(item.cupIcon) : '';
     return `
-      <button type="button" onclick="selectCaptureTrack('${item.cup}', '${item.track}')" class="p-2.5 rounded-xl border text-left text-xs flex items-center justify-between transition ${cls}">
-        <div>
-          <div class="text-xs">${item.track}</div>
-          <div class="text-[10px] text-slate-400">${item.cup}</div>
+      <button type="button" onclick="selectCaptureTrack('${item.cup}', '${item.track}')" class="p-2 rounded-xl border text-left text-xs flex items-center justify-between gap-2 transition ${cls}">
+        <div class="flex items-center gap-2.5 min-w-0">
+          ${tIconUrl ? `<img src="${tIconUrl}" alt="${item.track}" class="w-14 h-9 rounded-lg object-cover border border-slate-700 flex-shrink-0">` : ''}
+          <div class="min-w-0">
+            <div class="text-xs truncate">${item.track}</div>
+            <div class="text-[10px] text-slate-400 flex items-center gap-1 truncate">${cIconUrl ? `<img src="${cIconUrl}" class="w-3.5 h-3.5 object-contain">` : ''}<span>${item.cup}</span></div>
+          </div>
         </div>
-        <span class="text-sm">${isCurrent ? '✅' : '🏁'}</span>
+        <span class="text-sm flex-shrink-0">${isCurrent ? '✅' : '🏁'}</span>
       </button>
     `;
   }).join('');
@@ -2007,7 +2232,7 @@ function renderCapturePlayersAndStandings() {
             <div class="flex items-center gap-2">
               <span class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${p.color_hex}"></span>
               <span class="font-bold text-white text-xs sm:text-sm">${p.nickname || p.name}</span>
-              ${charName ? `<span class="text-[11px] text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">🏎️ ${charName}</span>` : ''}
+              ${charName ? renderCharacterBadgeHtml(charName) : ''}
             </div>
             ${statusBadge}
           </div>
@@ -2309,11 +2534,16 @@ function showFinishedMatchStep(match, session) {
       podiumCards.innerHTML = (match.scores || []).map((sc, idx) => {
         const medal = idx === 0 ? '🥇 1º' : idx === 1 ? '🥈 2º' : idx === 2 ? '🥉 3º' : `${idx + 1}º`;
         const borderCls = idx === 0 ? 'border-amber-400/50 bg-amber-500/10' : 'border-slate-800 bg-slate-900/80';
+        const charName = sc.metrics?.character || '';
+        const charIcon = getCharacterIconUrl(charName);
         return `
           <div class="p-3 rounded-xl border ${borderCls} flex items-center justify-between">
-            <div>
-              <div class="text-xs font-black text-white">${medal} ${sc.player_nickname || sc.player_name}</div>
-              <div class="text-[10px] text-slate-400">${sc.metrics?.character || 'Sin personaje'}</div>
+            <div class="flex items-center gap-2">
+              ${charIcon ? `<img src="${charIcon}" alt="${charName}" class="w-7 h-7 object-contain flex-shrink-0">` : ''}
+              <div>
+                <div class="text-xs font-black text-white">${medal} ${sc.player_nickname || sc.player_name}</div>
+                <div class="text-[10px] text-slate-400">${charName || 'Sin personaje'}</div>
+              </div>
             </div>
             <div class="text-base font-black text-amber-400">${sc.score} pts</div>
           </div>
